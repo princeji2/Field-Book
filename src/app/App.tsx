@@ -150,7 +150,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <StudentDashboard onNavigate={navigateTo} />
+          <StudentDashboard onNavigate={navigateTo} isGuest={isGuest} />
         </motion.div>
       )}
       {screen === "explore" && (
@@ -164,6 +164,7 @@ export default function App() {
           <ExploreScreen
             onNavigate={navigateTo}
             onViewDetail={id => navigateTo("details", id)}
+            isGuest={isGuest}
           />
         </motion.div>
       )}
@@ -175,7 +176,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <EventDetailScreen eventId={detailEventId} onNavigate={navigateTo} />
+          <EventDetailScreen eventId={detailEventId} onNavigate={navigateTo} isGuest={isGuest} />
         </motion.div>
       )}
       {screen === "myevents" && (
@@ -189,6 +190,7 @@ export default function App() {
           <MyEventsScreen
             onNavigate={navigateTo}
             onScanEvent={id => navigateTo("scanner", id)}
+            isGuest={isGuest}
           />
         </motion.div>
       )}
@@ -200,7 +202,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
         >
-          <ScannerScreen eventId={detailEventId} onNavigate={navigateTo} />
+          <ScannerScreen eventId={detailEventId} onNavigate={navigateTo} isGuest={isGuest} />
         </motion.div>
       )}
       {screen === "certs" && (
@@ -214,6 +216,7 @@ export default function App() {
           <CertificatesScreen
             onNavigate={navigateTo}
             onViewEventDetail={id => navigateTo("details", id)}
+            isGuest={isGuest}
           />
         </motion.div>
       )}
@@ -225,7 +228,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <NotificationsScreen onNavigate={navigateTo} />
+          <NotificationsScreen onNavigate={navigateTo} isGuest={isGuest} />
         </motion.div>
       )}
       {screen === "org-dashboard" && (
@@ -236,7 +239,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <OrganizerDashboard onNavigate={navigateTo} />
+          <OrganizerDashboard onNavigate={navigateTo} isGuest={isGuest} />
         </motion.div>
       )}
       {screen === "org-events" && (
@@ -247,7 +250,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <EventsWorkspaceScreen onNavigate={navigateTo} />
+          <EventsWorkspaceScreen onNavigate={navigateTo} isGuest={isGuest} />
         </motion.div>
       )}
       {screen === "org-events-create" && (
@@ -258,7 +261,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <EventsWorkspaceScreen onNavigate={navigateTo} initialView="create" />
+          <EventsWorkspaceScreen onNavigate={navigateTo} initialView="create" isGuest={isGuest} />
         </motion.div>
       )}
       {screen === "org-qr" && (
@@ -269,7 +272,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <OrgQRScreen onNavigate={navigateTo} />
+          <OrgQRScreen onNavigate={navigateTo} isGuest={isGuest} />
         </motion.div>
       )}
       {screen === "org-attendees" && (
@@ -280,7 +283,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <OrgAttendeesScreen onNavigate={navigateTo} eventId={attendeeEventId} />
+          <OrgAttendeesScreen onNavigate={navigateTo} eventId={attendeeEventId} isGuest={isGuest} />
         </motion.div>
       )}
       {screen === "org-analytics" && (
@@ -291,7 +294,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <OrgAnalyticsScreen onNavigate={navigateTo} />
+          <OrgAnalyticsScreen onNavigate={navigateTo} isGuest={isGuest} />
         </motion.div>
       )}
       {screen === "org-certs" && (
@@ -302,7 +305,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <OrgCertificatesScreen onNavigate={navigateTo} />
+          <OrgCertificatesScreen onNavigate={navigateTo} isGuest={isGuest} />
         </motion.div>
       )}
       {screen === "admin-dashboard" && (
@@ -414,8 +417,8 @@ export default function App() {
           style={{ height: "100vh", display: "flex", flexDirection: "column" }}
         >
           {currentRole === "admin"   && <AdminProfileScreen   onNavigate={navigateTo} isGuest={isGuest} />}
-          {currentRole === "org"     && <OrgProfileScreen     onNavigate={navigateTo} />}
-          {currentRole === "student" && <StudentProfileScreen onNavigate={navigateTo} />}
+          {currentRole === "org"     && <OrgProfileScreen     onNavigate={navigateTo} isGuest={isGuest} />}
+          {currentRole === "student" && <StudentProfileScreen onNavigate={navigateTo} isGuest={isGuest} />}
         </motion.div>
       )}
     </AnimatePresence>

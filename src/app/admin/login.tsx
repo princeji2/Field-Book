@@ -382,11 +382,11 @@ export function AdminLoginScreen({ onNavigate, onGuestLogin }: { onNavigate: (s:
         </div>
 
         <div className="text-center mt-5">
-          <button type="button" onClick={() => onNavigate("landing")}
+          <button type="button" onClick={() => onNavigate("admin-role-confirm")}
             className="flex items-center gap-1.5 mx-auto text-[10px] text-[#9C8E7E] hover:text-[#6B6355] transition-colors"
             style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
             <ArrowLeft size={10} strokeWidth={1.75} />
-            Back to landing
+            Change role
           </button>
         </div>
 
@@ -421,20 +421,10 @@ export function AdminRoleConfirmScreen({
 }) {
   const accountName = "Dr. Helena Marsh";
   const roles = DEMO_ROLE_OPTIONS;
-  const availableRoles = roles.filter(r => r.available);
-  const singleRole = availableRoles.length === 1;
 
-  const [selected,  setSelected]  = useState<string | null>(
-    singleRole ? availableRoles[0].role : null
-  );
+  const [selected,  setSelected]  = useState<string | null>(null);
   const [exiting, setExiting] = useState(false);
   const [ruleKey, setRuleKey] = useState(0);
-
-  useEffect(() => {
-    if (!singleRole) return;
-    const t = setTimeout(() => triggerConfirm(availableRoles[0]), 600);
-    return () => clearTimeout(t);
-  }, []);
 
   function triggerConfirm(opt: RoleOption) {
     if (exiting) return;
@@ -443,7 +433,7 @@ export function AdminRoleConfirmScreen({
     const roleKey = opt.role === "Admin" ? "admin" : opt.role === "Organizer" ? "org" : "student";
     onRoleSelect?.(roleKey);
     setTimeout(() => setExiting(true), 500);
-    setTimeout(() => onNavigate("admin-login"), 760);
+    setTimeout(() => onNavigate(opt.destination), 760);
   }
 
   function handleSelect(opt: RoleOption) {
@@ -485,11 +475,11 @@ export function AdminRoleConfirmScreen({
           <div className="px-6 pt-5 pb-6">
 
             <p className="text-[9px] tracking-widest uppercase mb-4" style={{ ...M, color:"#9C8E7E" }}>
-              {singleRole ? "Continuing as" : "Select a role to continue"}
+              Select a role to continue
             </p>
 
-            <div className={`flex gap-4 ${singleRole ? "justify-center" : "flex-col sm:flex-row"}`}>
-              {(singleRole ? availableRoles : roles).map((opt, cardIdx) => {
+            <div className={`flex gap-4 flex-col sm:flex-row`}>
+              {roles.map((opt, cardIdx) => {
                 const c           = ROLE_CONFIG[opt.role as UserRole];
                 const isSelected  = selected === opt.role;
                 const isOther     = selected !== null && !isSelected;

@@ -1520,6 +1520,7 @@ export function AppShell({
   onNav,
   onNavigate,
   topBarLeft,
+  isGuest,
   children,
 }: {
   activeNav: string;
@@ -1529,6 +1530,7 @@ export function AppShell({
   onNav?: (id: string) => void;
   onNavigate?: (s: Screen) => void;
   topBarLeft?: React.ReactNode;
+  isGuest?: boolean;
   children: React.ReactNode;
 }) {
   const firstName = studentName.split(" ")[0];
@@ -1683,6 +1685,13 @@ export function AppShell({
             )}
           </div>
           <div className="flex items-center gap-4 flex-shrink-0">
+            {isGuest && (
+              <div className="flex items-center gap-1.5 px-2.5 py-[5px] rounded-full border border-[#DCD4C2] flex-shrink-0"
+                style={{ background:"rgba(107,99,85,0.08)" }}>
+                <Eye size={10} strokeWidth={1.75} style={{ color:"#6B6355" }} />
+                <span className="text-[9px] font-medium tracking-wide" style={{ ...M, color:"#6B6355" }}>Viewing as Guest</span>
+              </div>
+            )}
             <button className="relative p-1" aria-label="Notifications">
               <Bell size={15} strokeWidth={1.5} className="text-[#6B6355]" />
               {notifCount > 0 && (

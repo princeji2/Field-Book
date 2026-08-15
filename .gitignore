@@ -1,0 +1,6 @@
+node_modules
+
+# Local secrets — MUST NOT be committed.
+.env
+.env.local
+.env.*.local

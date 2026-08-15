@@ -45,6 +45,7 @@ function OrgAppShell({
   onCreateEvent,
   topBarLeft,
   topBarActions,
+  isGuest,
   children,
 }: {
   activeNav: string;
@@ -55,6 +56,7 @@ function OrgAppShell({
   onCreateEvent?: () => void;
   topBarLeft?: React.ReactNode;
   topBarActions?: React.ReactNode;
+  isGuest?: boolean;
   children: React.ReactNode;
 }) {
   const initials = orgName.split(" ").filter(Boolean).map(w => w[0]).join("").slice(0, 2).toUpperCase();
@@ -159,6 +161,13 @@ function OrgAppShell({
           )}
           <div className="flex-1 min-w-0">{topBarLeft}</div>
           {topBarActions && <div className="flex items-center gap-2 flex-shrink-0">{topBarActions}</div>}
+          {isGuest && (
+            <div className="flex items-center gap-1.5 px-2.5 py-[5px] rounded-full border border-[#DCD4C2] flex-shrink-0"
+              style={{ background:"rgba(107,99,85,0.08)" }}>
+              <EyeIcon size={10} strokeWidth={1.75} style={{ color:"#6B6355" }} />
+              <span className="text-[9px] font-medium tracking-wide" style={{ ...M, color:"#6B6355" }}>Viewing as Guest</span>
+            </div>
+          )}
           <div className="flex items-center gap-3 flex-shrink-0">
             <button type="button" className="relative p-1" aria-label="Notifications">
               <Bell size={15} strokeWidth={1.5} color="#6B6355" />
@@ -357,7 +366,7 @@ function OrgStatusBadge({ status }: { status: OrgEventStatus }) {
   );
 }
 
-export function OrganizerDashboard({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+export function OrganizerDashboard({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
   const [activeNav, setActiveNav] = useState("org-dashboard");
 
   function handleNav(id: string) {
@@ -383,6 +392,7 @@ export function OrganizerDashboard({ onNavigate }: { onNavigate: (s: Screen) => 
       notifCount={2}
       onNav={handleNav}
       onCreateEvent={() => onNavigate("org-events-create")}
+      isGuest={isGuest}
       topBarLeft={
         <div>
           <p className="text-[13px] font-semibold text-[#1E1B16] leading-tight" style={F}>
@@ -774,7 +784,7 @@ function OrgMediaDropzone() {
   );
 }
 
-export function EventsWorkspaceScreen({ onNavigate, initialView = "list" }: { onNavigate: (s: Screen, id?: string) => void; initialView?: "list" | "create" }) {
+export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGuest }: { onNavigate: (s: Screen, id?: string) => void; initialView?: "list" | "create"; isGuest?: boolean }) {
   const [view, setView]           = useState<"list" | "create" | "edit">(initialView);
   const [editEvent, setEditEvent] = useState<OrgEvent | null>(null);
   const [statusTab, setStatusTab] = useState<"all" | OrgEventStatus>("all");
@@ -819,7 +829,9 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list" }: { on
     <button
       type="button"
       onClick={startCreate}
-      className="flex items-center gap-1.5 px-4 py-[7px] rounded-[6px] text-[12px] font-semibold transition-opacity hover:opacity-85"
+      disabled={isGuest}
+      title={isGuest ? "Disabled in guest mode" : undefined}
+      className="flex items-center gap-1.5 px-4 py-[7px] rounded-[6px] text-[12px] font-semibold transition-opacity hover:opacity-85 disabled:opacity-40 disabled:cursor-not-allowed"
       style={{ background: "#E2A23B", color: "#1E1B16", fontFamily: "'Public Sans', system-ui, sans-serif" }}
     >
       <Plus size={12} strokeWidth={2.2} />
@@ -848,7 +860,9 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list" }: { on
       <button
         type="button"
         onClick={() => toast("Saved as draft")}
-        className="px-3.5 py-[7px] rounded-[6px] text-[12px] font-semibold border transition-colors hover:bg-[#FCFAF3]"
+        disabled={isGuest}
+        title={isGuest ? "Disabled in guest mode" : undefined}
+        className="px-3.5 py-[7px] rounded-[6px] text-[12px] font-semibold border transition-colors hover:bg-[#FCFAF3] disabled:opacity-40 disabled:cursor-not-allowed"
         style={{ fontFamily: "'Public Sans', system-ui, sans-serif", borderColor: "rgba(30,27,22,0.25)", color: "#1E1B16" }}
       >
         Save as Draft
@@ -856,7 +870,9 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list" }: { on
       <button
         type="button"
         onClick={() => { toast.success("Event published successfully"); goBack(); }}
-        className="px-3.5 py-[7px] rounded-[6px] text-[12px] font-semibold transition-opacity hover:opacity-85"
+        disabled={isGuest}
+        title={isGuest ? "Disabled in guest mode" : undefined}
+        className="px-3.5 py-[7px] rounded-[6px] text-[12px] font-semibold transition-opacity hover:opacity-85 disabled:opacity-40 disabled:cursor-not-allowed"
         style={{ background: "#E2A23B", color: "#1E1B16", fontFamily: "'Public Sans', system-ui, sans-serif" }}
       >
         Publish
@@ -880,6 +896,7 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list" }: { on
         if (id === "org-certs")      { onNavigate("org-certs");      return; }
       }}
       onCreateEvent={startCreate}
+      isGuest={isGuest}
       topBarLeft={view === "list" ? listTopBarLeft : formTopBarLeft}
       topBarActions={view === "list" ? listTopBarActions : formTopBarActions}
     >
@@ -1033,7 +1050,8 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list" }: { on
                           type="button"
                           aria-label="Duplicate"
                           onClick={() => toast("Event duplicated as Draft")}
-                          className="p-2 rounded-[5px] text-[#6B6355] hover:bg-[#EDE7D9] hover:text-[#1E1B16] transition-colors"
+                          disabled={isGuest}
+                          className="p-2 rounded-[5px] text-[#6B6355] hover:bg-[#EDE7D9] hover:text-[#1E1B16] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Copy size={12} strokeWidth={1.8} />
                         </button>
@@ -1685,7 +1703,7 @@ const DATE_RANGE_OPTIONS: { id: DateRange; label: string }[] = [
   { id: "all", label: "All time" },
 ];
 
-export function OrgAnalyticsScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+export function OrgAnalyticsScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
   const [eventScope, setEventScope] = useState("all");
   const [dateRange, setDateRange] = useState<DateRange>("30d");
   const [hoveredRegIdx, setHoveredRegIdx] = useState<number | null>(null);
@@ -1724,6 +1742,7 @@ export function OrgAnalyticsScreen({ onNavigate }: { onNavigate: (s: Screen) => 
       notifCount={2}
       onNav={handleNav}
       onCreateEvent={() => onNavigate("org-events")}
+      isGuest={isGuest}
       topBarLeft={
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-semibold text-[#1E1B16]" style={F}>Analytics</span>
@@ -2355,7 +2374,7 @@ function CertStatusPill({ status }: { status: CertRecipient["status"] }) {
 }
 
 
-export function OrgCertificatesScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+export function OrgCertificatesScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
   const [recipients, setRecipients] = useState<CertRecipient[]>(INITIAL_RECIPIENTS);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [generating, setGenerating] = useState(false);
@@ -2418,6 +2437,7 @@ export function OrgCertificatesScreen({ onNavigate }: { onNavigate: (s: Screen) 
       orgName="Dr. Marcus Webb" orgRole="Student Affairs Office" notifCount={2}
       onNav={handleNav}
       onCreateEvent={() => onNavigate("org-events")}
+      isGuest={isGuest}
       topBarLeft={
         <div className="flex items-center gap-2.5">
           <button type="button" onClick={() => onNavigate("org-events")}
@@ -2531,7 +2551,8 @@ export function OrgCertificatesScreen({ onNavigate }: { onNavigate: (s: Screen) 
                   </p>
                 </div>
                 <button type="button" onClick={handleGenerate}
-                  disabled={generating || pendingCount === 0}
+                  disabled={generating || pendingCount === 0 || isGuest}
+                  title={isGuest ? "Disabled in guest mode" : undefined}
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-[6px] text-[13px] font-semibold transition-opacity hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ background:"#E2A23B", color:"#1E1B16", fontFamily:"'Public Sans', system-ui, sans-serif" }}>
                   {generating ? (
@@ -2546,7 +2567,8 @@ export function OrgCertificatesScreen({ onNavigate }: { onNavigate: (s: Screen) 
                 </button>
                 {failedCount > 0 && (
                   <button type="button" onClick={handleResendFailed}
-                    className="w-full flex items-center justify-center gap-2 py-2 rounded-[6px] text-[12px] font-medium border border-[#DCD4C2] text-[#6B6355] hover:border-[#1E1B16]/30 hover:text-[#1E1B16] transition-colors"
+                    disabled={isGuest}
+                    className="w-full flex items-center justify-center gap-2 py-2 rounded-[6px] text-[12px] font-medium border border-[#DCD4C2] text-[#6B6355] hover:border-[#1E1B16]/30 hover:text-[#1E1B16] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>
                     Resend {failedCount} Failed
                   </button>
@@ -2566,7 +2588,8 @@ export function OrgCertificatesScreen({ onNavigate }: { onNavigate: (s: Screen) 
                 {selected.size > 0 && (
                   <motion.button type="button" initial={{ opacity:0, scale:0.95 }} animate={{ opacity:1, scale:1 }}
                     onClick={handleResendFailed}
-                    className="flex items-center gap-1.5 px-3 py-[6px] rounded-[6px] text-[11px] font-medium border border-[#DCD4C2] text-[#6B6355] hover:border-[#1E1B16]/30 hover:text-[#1E1B16] transition-colors"
+                    disabled={isGuest}
+                    className="flex items-center gap-1.5 px-3 py-[6px] rounded-[6px] text-[11px] font-medium border border-[#DCD4C2] text-[#6B6355] hover:border-[#1E1B16]/30 hover:text-[#1E1B16] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>
                     Resend selected ({selected.size})
                   </motion.button>
@@ -2713,7 +2736,7 @@ function OrgQRSvg({ seed, size }: { seed: number; size: number }) {
   );
 }
 
-export function OrgQRScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+export function OrgQRScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
   const sessions = ORG_EVENTS.filter(e => e.status === "Live" || e.status === "Published");
   const defaultId = (sessions.find(e => e.status === "Live") ?? sessions[0])?.id ?? null;
 
@@ -2804,6 +2827,7 @@ export function OrgQRScreen({ onNavigate }: { onNavigate: (s: Screen) => void })
       notifCount={2}
       onNav={handleNav}
       onCreateEvent={() => onNavigate("org-events")}
+      isGuest={isGuest}
       topBarLeft={
         <div className="flex items-center gap-3">
           <span className="text-[13px] font-semibold text-[#1E1B16]" style={F}>QR Display</span>
@@ -3074,7 +3098,8 @@ export function OrgQRScreen({ onNavigate }: { onNavigate: (s: Screen) => void })
                     {/* Footer actions */}
                     <div className="flex items-center gap-3 w-full justify-between">
                       {qrSource === "generated" ? (
-                        <button type="button" onClick={handleRegen} disabled={regenFading}
+                        <button type="button" onClick={handleRegen} disabled={regenFading || isGuest}
+                          title={isGuest ? "Disabled in guest mode" : undefined}
                           className="flex items-center gap-2 px-4 py-[7px] rounded-[6px] text-[12px] font-medium border border-[#1E1B16]/25 text-[#1E1B16] bg-[#FCFAF3] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/50 transition-colors disabled:opacity-40"
                           style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
                           <RefreshCw size={12} strokeWidth={2} />
@@ -3103,7 +3128,8 @@ export function OrgQRScreen({ onNavigate }: { onNavigate: (s: Screen) => void })
                       {isLive && (
                         <button type="button"
                           onClick={() => setClosedIds(prev => new Set(prev).add(event.id))}
-                          className="flex items-center gap-1.5 px-3 py-[7px] rounded-[6px] text-[11px] font-medium border border-[#DCD4C2] text-[#6B6355] bg-[#FCFAF3] hover:bg-[#F6F1E7] hover:text-[#1E1B16] transition-colors"
+                          disabled={isGuest}
+                          className="flex items-center gap-1.5 px-3 py-[7px] rounded-[6px] text-[11px] font-medium border border-[#DCD4C2] text-[#6B6355] bg-[#FCFAF3] hover:bg-[#F6F1E7] hover:text-[#1E1B16] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                           style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
                           <CheckCircle2 size={11} strokeWidth={1.75} />
                           Close session
@@ -3128,9 +3154,11 @@ export function OrgQRScreen({ onNavigate }: { onNavigate: (s: Screen) => void })
 export function OrgAttendeesScreen({
   onNavigate,
   eventId = "oe4",
+  isGuest,
 }: {
   onNavigate: (s: Screen, id?: string) => void;
   eventId?: string;
+  isGuest?: boolean;
 }) {
   const event     = ORG_EVENTS.find(e => e.id === eventId) ?? ORG_EVENTS[3];
   const attendees = ATTENDEES_BY_EVENT[eventId] ?? ATTENDEES_BY_EVENT["oe4"];
@@ -3161,6 +3189,7 @@ export function OrgAttendeesScreen({
       notifCount={2}
       onNav={handleNav}
       onCreateEvent={() => onNavigate("org-events")}
+      isGuest={isGuest}
       topBarLeft={
         <div className="flex items-center gap-3">
           <button
@@ -3187,7 +3216,9 @@ export function OrgAttendeesScreen({
         <button
           type="button"
           onClick={() => toast("Export CSV — coming soon")}
-          className="flex items-center gap-1.5 px-3.5 py-[7px] rounded-[6px] text-[12px] font-semibold border transition-colors hover:bg-[#FCFAF3]"
+          disabled={isGuest}
+          title={isGuest ? "Disabled in guest mode" : undefined}
+          className="flex items-center gap-1.5 px-3.5 py-[7px] rounded-[6px] text-[12px] font-semibold border transition-colors hover:bg-[#FCFAF3] disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ fontFamily: "'Public Sans', system-ui, sans-serif", borderColor: "rgba(30,27,22,0.25)", color: "#1E1B16" }}
         >
           <Download size={12} strokeWidth={1.8} />
@@ -3320,7 +3351,7 @@ export function OrgAttendeesScreen({
 }
 
 // ─── Organizer profile screen wrapper ─────────────────────────────────────────
-export function OrgProfileScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+export function OrgProfileScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
   return (
     <OrgAppShell
       activeNav=""
@@ -3336,6 +3367,7 @@ export function OrgProfileScreen({ onNavigate }: { onNavigate: (s: Screen) => vo
         if (id === "org-analytics")  { onNavigate("org-analytics");  return; }
         if (id === "org-certs")      { onNavigate("org-certs");      return; }
       }}
+      isGuest={isGuest}
     >
       <ProfileScreen
         role="Organizer"
@@ -3351,6 +3383,7 @@ export function OrgProfileScreen({ onNavigate }: { onNavigate: (s: Screen) => vo
           { label: "Sessions",           value: 312 },
         ]}
         onBack={() => onNavigate("org-dashboard")}
+        isGuest={isGuest}
       />
     </OrgAppShell>
   );

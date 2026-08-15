@@ -1,0 +1,9 @@
+target/
+*.class
+*.log
+.mvn/wrapper/maven-wrapper.jar
+
+# Local secrets — MUST NOT be committed.
+.env
+.env.local
+.env.*.local

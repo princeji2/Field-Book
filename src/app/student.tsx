@@ -24,7 +24,7 @@ import {
 import { ProfileScreen } from "./profile";
 
 // ─── Student Dashboard ────────────────────────────────────────────────────────
-export function StudentDashboard({ onNavigate }: { onNavigate?: (s: Screen) => void }) {
+export function StudentDashboard({ onNavigate, isGuest }: { onNavigate?: (s: Screen) => void; isGuest?: boolean }) {
   const [activeNav, setActiveNav] = useState("dashboard");
 
   function handleNav(id: string) {
@@ -43,6 +43,7 @@ export function StudentDashboard({ onNavigate }: { onNavigate?: (s: Screen) => v
       notifCount={3}
       studentName="Sarah Chen"
       studentId="SCH-4421"
+      isGuest={isGuest}
       onNav={handleNav}
       onNavigate={onNavigate}
     >
@@ -339,11 +340,13 @@ export function EventCard({
   registered,
   onRegister,
   onView,
+  isGuest,
 }: {
   ev: EventItem;
   registered: boolean;
   onRegister: () => void;
   onView?: () => void;
+  isGuest?: boolean;
 }) {
   const spotsLow = ev.spots <= 10;
 
@@ -428,7 +431,9 @@ export function EventCard({
         <div className="border-t border-[#DCD4C2] px-4 py-3 space-y-2">
           <button
             onClick={onRegister}
-            className="w-full flex items-center justify-center gap-1.5 py-2 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors"
+            disabled={isGuest}
+            title={isGuest ? "Disabled in guest mode" : undefined}
+            className="w-full flex items-center justify-center gap-1.5 py-2 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Register <ArrowRight size={12} />
           </button>
@@ -614,9 +619,11 @@ function RelatedEventMini({
 export function EventDetailScreen({
   eventId,
   onNavigate,
+  isGuest,
 }: {
   eventId: string;
   onNavigate: (s: Screen, payload?: string) => void;
+  isGuest?: boolean;
 }) {
   const ev = EXPLORE_EVENTS.find(e => e.id === eventId) ?? EXPLORE_EVENTS[0];
   const details = EVENT_DETAILS[ev.id];
@@ -643,6 +650,7 @@ export function EventDetailScreen({
       notifCount={3}
       studentName="Sarah Chen"
       studentId="SCH-4421"
+      isGuest={isGuest}
       topBarLeft={backButton}
       onNav={(id) => {
         if (id === "profile")   { onNavigate("profile");   return; }
@@ -859,7 +867,9 @@ export function EventDetailScreen({
                         </div>
                         <button
                           onClick={() => setRegistered(true)}
-                          className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#E2A23B] text-[#1E1B16] font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors text-sm"
+                          disabled={isGuest}
+                          title={isGuest ? "Disabled in guest mode" : undefined}
+                          className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#E2A23B] text-[#1E1B16] font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           Register now <ArrowRight size={13} />
                         </button>
@@ -918,9 +928,11 @@ export function EventDetailScreen({
 export function ExploreScreen({
   onNavigate,
   onViewDetail,
+  isGuest,
 }: {
   onNavigate: (s: Screen) => void;
   onViewDetail?: (id: string) => void;
+  isGuest?: boolean;
 }) {
   const [query,       setQuery]       = useState("");
   const [category,   setCategory]    = useState("All");
@@ -993,6 +1005,7 @@ export function ExploreScreen({
       notifCount={3}
       studentName="Sarah Chen"
       studentId="SCH-4421"
+      isGuest={isGuest}
       onNav={handleNav}
       onNavigate={onNavigate}
       topBarLeft={topSearch}
@@ -1116,6 +1129,7 @@ export function ExploreScreen({
                         )
                       }
                       onView={onViewDetail ? () => onViewDetail(ev.id) : undefined}
+                      isGuest={isGuest}
                     />
                   </div>
                 </motion.div>
@@ -1204,10 +1218,12 @@ function UpcomingRow({
   ev,
   checkedIn,
   onCheckIn,
+  isGuest,
 }: {
   ev: MyRegisteredEvent;
   checkedIn: boolean;
   onCheckIn: () => void;
+  isGuest?: boolean;
 }) {
   return (
     <div className={`bg-[#FCFAF3] border rounded-[8px] px-5 py-4 flex items-center gap-5 transition-colors ${ev.checkInOpen && !checkedIn ? "border-[#2E6B4C]/40" : "border-[#1E1B16]/20"}`}>
@@ -1257,7 +1273,9 @@ function UpcomingRow({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={onCheckIn}
-              className="flex items-center gap-1.5 px-4 py-2 bg-[#E2A23B] text-[#1E1B16] text-xs font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors"
+              disabled={isGuest}
+              title={isGuest ? "Disabled in guest mode" : undefined}
+              className="flex items-center gap-1.5 px-4 py-2 bg-[#E2A23B] text-[#1E1B16] text-xs font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <QrCode size={12} strokeWidth={1.5} />
               Check In
@@ -1287,10 +1305,12 @@ function PastRow({
   ev,
   certGotten,
   onGetCert,
+  isGuest,
 }: {
   ev: MyRegisteredEvent;
   certGotten: boolean;
   onGetCert: () => void;
+  isGuest?: boolean;
 }) {
   const attended = ev.attended !== false;
 
@@ -1347,7 +1367,9 @@ function PastRow({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={onGetCert}
-                className="flex items-center gap-1.5 px-4 py-2 border border-[#1E1B16]/25 text-xs text-[#1E1B16] rounded-[7px] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/40 transition-colors"
+                disabled={isGuest}
+                title={isGuest ? "Disabled in guest mode" : undefined}
+                className="flex items-center gap-1.5 px-4 py-2 border border-[#1E1B16]/25 text-xs text-[#1E1B16] rounded-[7px] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Award size={12} strokeWidth={1.5} className="text-[#E2A23B]" />
                 Get Certificate
@@ -1363,9 +1385,11 @@ function PastRow({
 export function MyEventsScreen({
   onNavigate,
   onScanEvent,
+  isGuest,
 }: {
   onNavigate: (s: Screen) => void;
   onScanEvent?: (eventId: string) => void;
+  isGuest?: boolean;
 }) {
   const [tab,          setTab]          = useState<"upcoming" | "past">("upcoming");
   const [checkedInIds, setCheckedInIds] = useState<string[]>([]);
@@ -1390,6 +1414,7 @@ export function MyEventsScreen({
       notifCount={3}
       studentName="Sarah Chen"
       studentId="SCH-4421"
+      isGuest={isGuest}
       onNav={handleNav}
       onNavigate={onNavigate}
       topBarLeft={pageTitle}
@@ -1487,6 +1512,7 @@ export function MyEventsScreen({
                               setCheckedInIds(p => [...p, ev.id]);
                             }
                           }}
+                          isGuest={isGuest}
                         />
                       </motion.div>
                     ))}
@@ -1524,6 +1550,7 @@ export function MyEventsScreen({
                           ev={ev}
                           certGotten={certGottenIds.includes(ev.id) || !!ev.certIssued}
                           onGetCert={() => setCertGottenIds(p => [...p, ev.id])}
+                          isGuest={isGuest}
                         />
                       </motion.div>
                     ))}
@@ -1557,9 +1584,11 @@ export function MyEventsScreen({
 export function ScannerScreen({
   eventId,
   onNavigate,
+  isGuest,
 }: {
   eventId?: string;
   onNavigate: (s: Screen) => void;
+  isGuest?: boolean;
 }) {
   const scannedEvent: MyRegisteredEvent =
     MY_UPCOMING.find(e => e.id === eventId) ?? MY_UPCOMING[0];
@@ -1703,6 +1732,8 @@ export function ScannerScreen({
                 <button
                   className="absolute inset-0 focus:outline-none"
                   onClick={triggerScan}
+                  disabled={isGuest}
+                  title={isGuest ? "Disabled in guest mode" : undefined}
                   aria-label="Simulate QR scan"
                 />
 
@@ -1759,8 +1790,10 @@ export function ScannerScreen({
                           />
                           <button
                             onClick={handleManualSubmit}
+                            disabled={isGuest}
+                            title={isGuest ? "Disabled in guest mode" : undefined}
                             aria-label="Submit event code"
-                            className="w-10 flex items-center justify-center bg-[#1E1B16] text-[#F6F1E7] rounded-[7px] border border-[#1E1B16] hover:bg-[#2E2A22] transition-colors flex-shrink-0"
+                            className="w-10 flex items-center justify-center bg-[#1E1B16] text-[#F6F1E7] rounded-[7px] border border-[#1E1B16] hover:bg-[#2E2A22] transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             <ArrowRight size={14} />
                           </button>
@@ -2308,9 +2341,11 @@ function CertCard({
 export function CertificatesScreen({
   onNavigate,
   onViewEventDetail,
+  isGuest,
 }: {
   onNavigate: (s: Screen) => void;
   onViewEventDetail?: (eventId: string) => void;
+  isGuest?: boolean;
 }) {
   const [query,        setQuery]        = useState("");
   const [selectedCert, setSelectedCert] = useState<CertRecord | null>(null);
@@ -2353,6 +2388,7 @@ export function CertificatesScreen({
         notifCount={3}
         studentName="Sarah Chen"
         studentId="SCH-4421"
+        isGuest={isGuest}
         onNav={handleNav}
         onNavigate={onNavigate}
         topBarLeft={pageTitle}
@@ -2572,7 +2608,7 @@ function NotifRow({
   );
 }
 
-export function NotificationsScreen({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+export function NotificationsScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
   const [activeNav, setActiveNav] = useState("notifs");
   const [readIds,   setReadIds]   = useState<string[]>([]);
 
@@ -2595,6 +2631,7 @@ export function NotificationsScreen({ onNavigate }: { onNavigate: (s: Screen) =>
       notifCount={unreadCount}
       studentName="Sarah Chen"
       studentId="SCH-4421"
+      isGuest={isGuest}
       onNav={handleNav}
       onNavigate={onNavigate}
     >
@@ -2626,9 +2663,10 @@ export function NotificationsScreen({ onNavigate }: { onNavigate: (s: Screen) =>
         {unreadCount > 0 && (
           <motion.button
             type="button"
-            className="mt-1 text-[12px] text-[#6B6355] hover:text-[#1E1B16] transition-colors pb-px"
+            className="mt-1 text-[12px] text-[#6B6355] hover:text-[#1E1B16] transition-colors pb-px disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ fontFamily: "'Public Sans', system-ui, sans-serif", borderBottom: "1px solid rgba(107,99,85,0.4)" }}
             onClick={() => setReadIds(NOTIFS.map(n => n.id))}
+            disabled={isGuest}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.2, delay: 0.15 }}
@@ -2700,13 +2738,14 @@ export function NotificationsScreen({ onNavigate }: { onNavigate: (s: Screen) =>
 }
 
 // ─── Student profile screen wrapper ───────────────────────────────────────────
-export function StudentProfileScreen({ onNavigate }: { onNavigate?: (s: Screen) => void }) {
+export function StudentProfileScreen({ onNavigate, isGuest }: { onNavigate?: (s: Screen) => void; isGuest?: boolean }) {
   return (
     <AppShell
       activeNav=""
       notifCount={0}
       studentName="Sarah Chen"
       studentId="SCH-4421"
+      isGuest={isGuest}
       onNav={id => {
         if (id === "landing")   { onNavigate?.("landing");   return; }
         if (id === "dashboard") { onNavigate?.("dashboard"); return; }
@@ -2731,6 +2770,7 @@ export function StudentProfileScreen({ onNavigate }: { onNavigate?: (s: Screen) 
           { label: "Sessions",            value: 3841 },
         ]}
         onBack={() => onNavigate?.("dashboard")}
+        isGuest={isGuest}
       />
     </AppShell>
   );

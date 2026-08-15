@@ -97,6 +97,7 @@ export function ProfileScreen({
   joinedDate,
   stats,
   onBack,
+  isGuest,
 }: {
   role: ProfileRole;
   name: string;
@@ -107,6 +108,7 @@ export function ProfileScreen({
   joinedDate: string;
   stats?: StatItem[];
   onBack: () => void;
+  isGuest?: boolean;
 }) {
   const [_p] = useState<{
     name?: string; email?: string; phone?: string; bio?: string;
@@ -231,7 +233,8 @@ export function ProfileScreen({
               </motion.button>
             )}
           </AnimatePresence>
-          <button type="button" onClick={handleSave} disabled={saving}
+          <button type="button" onClick={handleSave} disabled={saving || isGuest}
+            title={isGuest ? "Disabled in guest mode" : undefined}
             className="flex items-center gap-2 px-4 py-[7px] rounded-[6px] text-[12px] font-semibold transition-opacity hover:opacity-85 disabled:opacity-60"
             style={{ ...PS, background: "#E2A23B", color: "#1E1B16" }}>
             {saving
@@ -422,7 +425,8 @@ export function ProfileScreen({
             <button
               type="button"
               onClick={handleUpdatePassword}
-              disabled={pwSaving}
+              disabled={pwSaving || isGuest}
+              title={isGuest ? "Disabled in guest mode" : undefined}
               className="flex items-center gap-2 px-4 py-[8px] rounded-[6px] text-[12px] font-semibold transition-opacity hover:opacity-85 disabled:opacity-60"
               style={{ ...PS, background: "#E2A23B", color: "#1E1B16" }}
             >
@@ -446,7 +450,9 @@ export function ProfileScreen({
               <button
                 type="button"
                 onClick={handleLogOutAll}
-                className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-[7px] rounded-[6px] text-[11px] font-medium border border-[#DCD4C2] text-[#6B6355] hover:border-[#B5432E]/40 hover:text-[#B5432E] transition-colors"
+                disabled={isGuest}
+                title={isGuest ? "Disabled in guest mode" : undefined}
+                className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-[7px] rounded-[6px] text-[11px] font-medium border border-[#DCD4C2] text-[#6B6355] hover:border-[#B5432E]/40 hover:text-[#B5432E] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 style={PS}
               >
                 <LogOut size={11} strokeWidth={1.75} />
@@ -492,7 +498,9 @@ export function ProfileScreen({
               <button
                 type="button"
                 onClick={() => setShowDeactivate(true)}
-                className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-[7px] rounded-[6px] text-[11px] font-medium transition-colors"
+                disabled={isGuest}
+                title={isGuest ? "Disabled in guest mode" : undefined}
+                className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-[7px] rounded-[6px] text-[11px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{ ...PS, color: "#B5432E", border: "1px solid rgba(181,67,46,0.4)" }}
                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(181,67,46,0.06)"; (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(181,67,46,0.65)"; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = ""; (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(181,67,46,0.4)"; }}
