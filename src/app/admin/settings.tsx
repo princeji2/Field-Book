@@ -4,6 +4,7 @@ import { RefreshCw, Check, AlertTriangle, Settings, ChevronDown } from "lucide-r
 import { toast } from "sonner";
 import { F, M, dotGrid, type Screen, InlineSeal } from "../shared";
 import { AdminAppShell } from "./shell";
+import { signOutUser, type AuthedProfile } from "../../lib/auth";
 
 // ─── Admin Settings ──────────────────────────────────────────────────────────
 
@@ -105,7 +106,7 @@ function SettingsRow({ label, hint, children }: { label: string; hint?: string; 
   );
 }
 
-export function AdminSettingsScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
+export function AdminSettingsScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const [saved, setSaved] = useState<SettingsState>(() => {
     try {
       const raw = localStorage.getItem("fieldbook-admin-settings");
@@ -162,12 +163,12 @@ export function AdminSettingsScreen({ onNavigate, isGuest }: { onNavigate: (s: S
   return (
     <AdminAppShell
       activeNav="admin-settings"
-      adminName="Dr. Helena Marsh"
+      adminName={profile?.fullName ?? "Dr. Helena Marsh"}
       adminRole="Platform Administrator"
       pendingApprovals={0}
       notifCount={3}
       isGuest={isGuest}
-      onLogOut={() => onNavigate("admin-login")}
+      onLogOut={() => { void signOutUser(); onNavigate("admin-login"); }}
       onNav={settingsNavHandler}
       topBarLeft={
         <div className="flex items-center gap-2.5">

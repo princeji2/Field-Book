@@ -22,9 +22,10 @@ import {
   MockQR, CertificateSeal, AppShell, NOTIF_GROUPS, type NotifGroup,
 } from "./shared";
 import { ProfileScreen } from "./profile";
+import { type AuthedProfile } from "../lib/auth";
 
 // ─── Student Dashboard ────────────────────────────────────────────────────────
-export function StudentDashboard({ onNavigate, isGuest }: { onNavigate?: (s: Screen) => void; isGuest?: boolean }) {
+export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const [activeNav, setActiveNav] = useState("dashboard");
 
   function handleNav(id: string) {
@@ -41,8 +42,8 @@ export function StudentDashboard({ onNavigate, isGuest }: { onNavigate?: (s: Scr
     <AppShell
       activeNav={activeNav}
       notifCount={3}
-      studentName="Sarah Chen"
-      studentId="SCH-4421"
+      studentName={profile?.fullName ?? "Sarah Chen"}
+      studentId={profile?.id ?? "SCH-4421"}
       isGuest={isGuest}
       onNav={handleNav}
       onNavigate={onNavigate}
@@ -620,10 +621,12 @@ export function EventDetailScreen({
   eventId,
   onNavigate,
   isGuest,
+  profile,
 }: {
   eventId: string;
   onNavigate: (s: Screen, payload?: string) => void;
   isGuest?: boolean;
+  profile?: AuthedProfile | null;
 }) {
   const ev = EXPLORE_EVENTS.find(e => e.id === eventId) ?? EXPLORE_EVENTS[0];
   const details = EVENT_DETAILS[ev.id];
@@ -648,8 +651,8 @@ export function EventDetailScreen({
     <AppShell
       activeNav="explore"
       notifCount={3}
-      studentName="Sarah Chen"
-      studentId="SCH-4421"
+      studentName={profile?.fullName ?? "Sarah Chen"}
+      studentId={profile?.id ?? "SCH-4421"}
       isGuest={isGuest}
       topBarLeft={backButton}
       onNav={(id) => {
@@ -929,10 +932,12 @@ export function ExploreScreen({
   onNavigate,
   onViewDetail,
   isGuest,
+  profile,
 }: {
   onNavigate: (s: Screen) => void;
   onViewDetail?: (id: string) => void;
   isGuest?: boolean;
+  profile?: AuthedProfile | null;
 }) {
   const [query,       setQuery]       = useState("");
   const [category,   setCategory]    = useState("All");
@@ -1003,8 +1008,8 @@ export function ExploreScreen({
     <AppShell
       activeNav={activeNav}
       notifCount={3}
-      studentName="Sarah Chen"
-      studentId="SCH-4421"
+      studentName={profile?.fullName ?? "Sarah Chen"}
+      studentId={profile?.id ?? "SCH-4421"}
       isGuest={isGuest}
       onNav={handleNav}
       onNavigate={onNavigate}
@@ -1386,10 +1391,12 @@ export function MyEventsScreen({
   onNavigate,
   onScanEvent,
   isGuest,
+  profile,
 }: {
   onNavigate: (s: Screen) => void;
   onScanEvent?: (eventId: string) => void;
   isGuest?: boolean;
+  profile?: AuthedProfile | null;
 }) {
   const [tab,          setTab]          = useState<"upcoming" | "past">("upcoming");
   const [checkedInIds, setCheckedInIds] = useState<string[]>([]);
@@ -1412,8 +1419,8 @@ export function MyEventsScreen({
     <AppShell
       activeNav="events"
       notifCount={3}
-      studentName="Sarah Chen"
-      studentId="SCH-4421"
+      studentName={profile?.fullName ?? "Sarah Chen"}
+      studentId={profile?.id ?? "SCH-4421"}
       isGuest={isGuest}
       onNav={handleNav}
       onNavigate={onNavigate}
@@ -2342,10 +2349,12 @@ export function CertificatesScreen({
   onNavigate,
   onViewEventDetail,
   isGuest,
+  profile,
 }: {
   onNavigate: (s: Screen) => void;
   onViewEventDetail?: (eventId: string) => void;
   isGuest?: boolean;
+  profile?: AuthedProfile | null;
 }) {
   const [query,        setQuery]        = useState("");
   const [selectedCert, setSelectedCert] = useState<CertRecord | null>(null);
@@ -2386,8 +2395,8 @@ export function CertificatesScreen({
       <AppShell
         activeNav="certs"
         notifCount={3}
-        studentName="Sarah Chen"
-        studentId="SCH-4421"
+        studentName={profile?.fullName ?? "Sarah Chen"}
+        studentId={profile?.id ?? "SCH-4421"}
         isGuest={isGuest}
         onNav={handleNav}
         onNavigate={onNavigate}
@@ -2608,7 +2617,7 @@ function NotifRow({
   );
 }
 
-export function NotificationsScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
+export function NotificationsScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const [activeNav, setActiveNav] = useState("notifs");
   const [readIds,   setReadIds]   = useState<string[]>([]);
 
@@ -2629,8 +2638,8 @@ export function NotificationsScreen({ onNavigate, isGuest }: { onNavigate: (s: S
     <AppShell
       activeNav={activeNav}
       notifCount={unreadCount}
-      studentName="Sarah Chen"
-      studentId="SCH-4421"
+      studentName={profile?.fullName ?? "Sarah Chen"}
+      studentId={profile?.id ?? "SCH-4421"}
       isGuest={isGuest}
       onNav={handleNav}
       onNavigate={onNavigate}
@@ -2738,13 +2747,13 @@ export function NotificationsScreen({ onNavigate, isGuest }: { onNavigate: (s: S
 }
 
 // ─── Student profile screen wrapper ───────────────────────────────────────────
-export function StudentProfileScreen({ onNavigate, isGuest }: { onNavigate?: (s: Screen) => void; isGuest?: boolean }) {
+export function StudentProfileScreen({ onNavigate, isGuest, profile }: { onNavigate?: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   return (
     <AppShell
       activeNav=""
       notifCount={0}
-      studentName="Sarah Chen"
-      studentId="SCH-4421"
+      studentName={profile?.fullName ?? "Sarah Chen"}
+      studentId={profile?.id ?? "SCH-4421"}
       isGuest={isGuest}
       onNav={id => {
         if (id === "landing")   { onNavigate?.("landing");   return; }
@@ -2758,8 +2767,8 @@ export function StudentProfileScreen({ onNavigate, isGuest }: { onNavigate?: (s:
     >
       <ProfileScreen
         role="Student"
-        name="Sarah Chen"
-        email="s.chen@fieldbook.edu"
+        name={profile?.fullName ?? "Sarah Chen"}
+        email={profile?.email ?? "s.chen@fieldbook.edu"}
         phone=""
         bio=""
         accountId="SCH-4421"

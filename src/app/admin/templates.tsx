@@ -10,6 +10,7 @@ import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 import { F, M, dotGrid, type Screen, CertificateSeal, InlineSeal } from "../shared";
 import { AdminAppShell } from "./shell";
+import { signOutUser, type AuthedProfile } from "../../lib/auth";
 
 // ─── Certificate Templates ────────────────────────────────────────────────────
 
@@ -1220,7 +1221,7 @@ function UploadDesignScreen({
   );
 }
 
-export function CertificateTemplatesScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
+export function CertificateTemplatesScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const [templates, setTemplates] = useState<CertTemplate[]>(() => {
     try {
       const raw = localStorage.getItem("fieldbook-templates");
@@ -1309,12 +1310,12 @@ export function CertificateTemplatesScreen({ onNavigate, isGuest }: { onNavigate
     return (
       <AdminAppShell
         activeNav="admin-templates"
-        adminName="Dr. Helena Marsh"
+        adminName={profile?.fullName ?? "Dr. Helena Marsh"}
         adminRole="Platform Administrator"
         pendingApprovals={0}
         notifCount={3}
         isGuest={isGuest}
-        onLogOut={() => onNavigate("admin-login")}
+        onLogOut={() => { void signOutUser(); onNavigate("admin-login"); }}
         onNav={sharedNavHandler}
         topBarLeft={
           <div className="flex items-center gap-3">
@@ -1355,12 +1356,12 @@ export function CertificateTemplatesScreen({ onNavigate, isGuest }: { onNavigate
     return (
       <AdminAppShell
         activeNav="admin-templates"
-        adminName="Dr. Helena Marsh"
+        adminName={profile?.fullName ?? "Dr. Helena Marsh"}
         adminRole="Platform Administrator"
         pendingApprovals={0}
         notifCount={3}
         isGuest={isGuest}
-        onLogOut={() => onNavigate("admin-login")}
+        onLogOut={() => { void signOutUser(); onNavigate("admin-login"); }}
         onNav={sharedNavHandler}
         topBarLeft={<span className="text-[13px] font-semibold text-[#1E1B16]" style={F}>Certificate Templates</span>}
       >
@@ -1379,12 +1380,12 @@ export function CertificateTemplatesScreen({ onNavigate, isGuest }: { onNavigate
   return (
     <AdminAppShell
       activeNav="admin-templates"
-      adminName="Dr. Helena Marsh"
+      adminName={profile?.fullName ?? "Dr. Helena Marsh"}
       adminRole="Platform Administrator"
       pendingApprovals={0}
       notifCount={3}
       isGuest={isGuest}
-      onLogOut={() => onNavigate("admin-login")}
+      onLogOut={() => { void signOutUser(); onNavigate("admin-login"); }}
       onNav={sharedNavHandler}
       topBarLeft={
         <div className="flex items-center gap-3">

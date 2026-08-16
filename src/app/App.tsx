@@ -4,8 +4,9 @@ import { Smartphone, Monitor } from "lucide-react";
 import { Toaster } from "sonner";
 import { type Screen, ErrorBoundary } from "./shared";
 import {
-  LoginPage, SignupPage, ForgotPage,
+  SignupPage, ForgotPage,
 } from "./shared";
+import { getCurrentUserProfile, roleToScreen, type AuthedProfile } from "../lib/auth";
 import {
   StudentDashboard, ExploreScreen, EventDetailScreen,
   MyEventsScreen, ScannerScreen, CertificatesScreen, NotificationsScreen,
@@ -33,12 +34,38 @@ export default function App() {
   const [attendeeEventId, setAttendeeEventId] = useState("oe4");
   const [livePendingApprovals, setLivePendingApprovals] = useState(4);
   const [currentRole, setCurrentRole]     = useState<"admin" | "org" | "student">("admin");
+  const [profile, setProfile]             = useState<AuthedProfile | null>(null);
   const [isGuest, setIsGuest]             = useState(false);
   const [pendingRole, setPendingRole]     = useState<"admin" | "org" | "student">("admin");
   const [mobilePreview, setMobilePreview] = useState(false);
   const [mobileScale,   setMobileScale]   = useState(1);
   // Detect when this instance is running inside the preview iframe
   const isEmbedded = window.self !== window.top;
+
+  // Session bootstrap: on mount, check for an existing Supabase session and
+  // route an already-authenticated user straight to their dashboard, so a
+  // page refresh doesn't bounce them back to landing/login. If there's no
+  // session (or no matching profiles row), getCurrentUserProfile() resolves
+  // null and this falls through to the existing default ("landing")
+  // untouched — same behavior as today for a logged-out visitor.
+  useEffect(() => {
+    (async () => {
+      const fetched = await getCurrentUserProfile();
+      if (!fetched) return;
+      const role = fetched.role === "admin" ? "admin" : fetched.role === "organizer" ? "org" : "student";
+      setProfile(fetched);
+      setCurrentRole(role);
+      setScreen(roleToScreen(fetched.role));
+    })();
+  }, []);
+
+  // Called by AdminLoginScreen/SignupPage right after a successful
+  // sign-in/sign-up, with the profile they already fetched as part of that
+  // flow — so App.tsx's single source of truth stays current without a
+  // second, redundant getCurrentUserProfile() call here.
+  function handleAuthenticated(p: AuthedProfile) {
+    setProfile(p);
+  }
 
   useEffect(() => {
     function calc() {
@@ -58,8 +85,10 @@ export default function App() {
     if (ADMIN_SCREENS.has(s)) setCurrentRole("admin");
     else if (ORG_SCREENS.has(s)) setCurrentRole("org");
     else if (STU_SCREENS.has(s)) setCurrentRole("student");
-    // Clear guest mode when logging out or leaving the admin area
-    if (s === "admin-login" || s === "landing") setIsGuest(false);
+    // Clear guest mode and the real profile when logging out or leaving the
+    // admin area — every real logout path (student/organizer -> "landing",
+    // admin -> "admin-login") already routes through here.
+    if (s === "admin-login" || s === "landing") { setIsGuest(false); setProfile(null); }
     setScreen(s);
   }
 
@@ -109,17 +138,6 @@ export default function App() {
           <LandingPage onNavigate={navigateTo} />
         </motion.div>
       )}
-      {screen === "login" && (
-        <motion.div
-          key="login"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18 }}
-        >
-          <LoginPage onNavigate={navigateTo} />
-        </motion.div>
-      )}
       {screen === "signup" && (
         <motion.div
           key="signup"
@@ -128,7 +146,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
         >
-          <SignupPage onNavigate={navigateTo} />
+          <SignupPage onNavigate={navigateTo} onAuthenticated={handleAuthenticated} />
         </motion.div>
       )}
       {screen === "forgot" && (
@@ -150,7 +168,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <StudentDashboard onNavigate={navigateTo} isGuest={isGuest} />
+          <StudentDashboard onNavigate={navigateTo} isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "explore" && (
@@ -165,6 +183,7 @@ export default function App() {
             onNavigate={navigateTo}
             onViewDetail={id => navigateTo("details", id)}
             isGuest={isGuest}
+            profile={profile}
           />
         </motion.div>
       )}
@@ -176,7 +195,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <EventDetailScreen eventId={detailEventId} onNavigate={navigateTo} isGuest={isGuest} />
+          <EventDetailScreen eventId={detailEventId} onNavigate={navigateTo} isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "myevents" && (
@@ -191,6 +210,7 @@ export default function App() {
             onNavigate={navigateTo}
             onScanEvent={id => navigateTo("scanner", id)}
             isGuest={isGuest}
+            profile={profile}
           />
         </motion.div>
       )}
@@ -217,6 +237,7 @@ export default function App() {
             onNavigate={navigateTo}
             onViewEventDetail={id => navigateTo("details", id)}
             isGuest={isGuest}
+            profile={profile}
           />
         </motion.div>
       )}
@@ -228,7 +249,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <NotificationsScreen onNavigate={navigateTo} isGuest={isGuest} />
+          <NotificationsScreen onNavigate={navigateTo} isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "org-dashboard" && (
@@ -239,7 +260,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <OrganizerDashboard onNavigate={navigateTo} isGuest={isGuest} />
+          <OrganizerDashboard onNavigate={navigateTo} isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "org-events" && (
@@ -250,7 +271,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <EventsWorkspaceScreen onNavigate={navigateTo} isGuest={isGuest} />
+          <EventsWorkspaceScreen onNavigate={navigateTo} isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "org-events-create" && (
@@ -261,7 +282,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <EventsWorkspaceScreen onNavigate={navigateTo} initialView="create" isGuest={isGuest} />
+          <EventsWorkspaceScreen onNavigate={navigateTo} initialView="create" isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "org-qr" && (
@@ -272,7 +293,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <OrgQRScreen onNavigate={navigateTo} isGuest={isGuest} />
+          <OrgQRScreen onNavigate={navigateTo} isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "org-attendees" && (
@@ -283,7 +304,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <OrgAttendeesScreen onNavigate={navigateTo} eventId={attendeeEventId} isGuest={isGuest} />
+          <OrgAttendeesScreen onNavigate={navigateTo} eventId={attendeeEventId} isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "org-analytics" && (
@@ -294,7 +315,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <OrgAnalyticsScreen onNavigate={navigateTo} isGuest={isGuest} />
+          <OrgAnalyticsScreen onNavigate={navigateTo} isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "org-certs" && (
@@ -305,7 +326,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <OrgCertificatesScreen onNavigate={navigateTo} isGuest={isGuest} />
+          <OrgCertificatesScreen onNavigate={navigateTo} isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "admin-dashboard" && (
@@ -316,7 +337,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <AdminDashboard onNavigate={navigateTo} livePendingApprovals={livePendingApprovals} isGuest={isGuest} />
+          <AdminDashboard onNavigate={navigateTo} livePendingApprovals={livePendingApprovals} isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "admin-approvals" && (
@@ -327,7 +348,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <ApprovalsScreen onNavigate={navigateTo} onPendingChange={setLivePendingApprovals} isGuest={isGuest} />
+          <ApprovalsScreen onNavigate={navigateTo} onPendingChange={setLivePendingApprovals} isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "admin-users" && (
@@ -338,7 +359,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <UsersScreen onNavigate={navigateTo} isGuest={isGuest} />
+          <UsersScreen onNavigate={navigateTo} isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "admin-templates" && (
@@ -349,7 +370,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <CertificateTemplatesScreen onNavigate={navigateTo} isGuest={isGuest} />
+          <CertificateTemplatesScreen onNavigate={navigateTo} isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "admin-analytics" && (
@@ -360,7 +381,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <AdminAnalyticsScreen onNavigate={navigateTo} isGuest={isGuest} />
+          <AdminAnalyticsScreen onNavigate={navigateTo} isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "admin-settings" && (
@@ -371,7 +392,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <AdminSettingsScreen onNavigate={navigateTo} isGuest={isGuest} />
+          <AdminSettingsScreen onNavigate={navigateTo} isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "admin-notifs" && (
@@ -382,7 +403,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <AdminNotifsScreen onNavigate={navigateTo} isGuest={isGuest} />
+          <AdminNotifsScreen onNavigate={navigateTo} isGuest={isGuest} profile={profile} />
         </motion.div>
       )}
       {screen === "admin-login" && (
@@ -393,7 +414,7 @@ export default function App() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.22 }}
         >
-          <AdminLoginScreen onNavigate={navigateTo} onGuestLogin={handleGuestLogin} selectedRole={pendingRole} />
+          <AdminLoginScreen onNavigate={navigateTo} onGuestLogin={handleGuestLogin} selectedRole={pendingRole} onAuthenticated={handleAuthenticated} />
         </motion.div>
       )}
       {screen === "admin-role-confirm" && (
@@ -404,7 +425,7 @@ export default function App() {
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.22, ease: "easeOut" }}
         >
-          <AdminRoleConfirmScreen onNavigate={navigateTo} onRoleSelect={setPendingRole} onGuestLogin={handleGuestLogin} />
+          <AdminRoleConfirmScreen onNavigate={navigateTo} onRoleSelect={setPendingRole} onGuestLogin={handleGuestLogin} profile={profile} />
         </motion.div>
       )}
       {screen === "profile" && (
@@ -416,9 +437,9 @@ export default function App() {
           transition={{ duration: 0.18 }}
           style={{ height: "100vh", display: "flex", flexDirection: "column" }}
         >
-          {currentRole === "admin"   && <AdminProfileScreen   onNavigate={navigateTo} isGuest={isGuest} />}
-          {currentRole === "org"     && <OrgProfileScreen     onNavigate={navigateTo} isGuest={isGuest} />}
-          {currentRole === "student" && <StudentProfileScreen onNavigate={navigateTo} isGuest={isGuest} />}
+          {currentRole === "admin"   && <AdminProfileScreen   onNavigate={navigateTo} isGuest={isGuest} profile={profile} />}
+          {currentRole === "org"     && <OrgProfileScreen     onNavigate={navigateTo} isGuest={isGuest} profile={profile} />}
+          {currentRole === "student" && <StudentProfileScreen onNavigate={navigateTo} isGuest={isGuest} profile={profile} />}
         </motion.div>
       )}
     </AnimatePresence>

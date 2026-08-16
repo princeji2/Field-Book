@@ -16,6 +16,7 @@ export type SignupRole = Extract<AppRole, "student" | "organizer">;
 export interface AuthedProfile {
   id: string;
   fullName: string;
+  email: string;
   role: AppRole;
 }
 
@@ -48,7 +49,7 @@ export async function getCurrentUserProfile(): Promise<AuthedProfile | null> {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, role")
+    .select("id, full_name, email, role")
     .eq("id", user.id)
     .single();
 
@@ -57,6 +58,7 @@ export async function getCurrentUserProfile(): Promise<AuthedProfile | null> {
   return {
     id: data.id as string,
     fullName: data.full_name as string,
+    email: data.email as string,
     role: data.role as AppRole,
   };
 }

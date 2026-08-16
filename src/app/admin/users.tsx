@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowLeft, Search, Check, X, Users, UserPlus, UserCheck, Ban, ShieldCheck, Mail, MoreHorizontal, Filter } from "lucide-react";
+import { ArrowLeft, Search, Check, X, Users, UserPlus, UserCheck, Ban, ShieldCheck, Mail, MoreHorizontal, Filter, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { F, M, dotGrid, type Screen, CertificateSeal } from "../shared";
 import { AdminAppShell, ROLE_CONFIG, type UserRole } from "./shell";
+import { signOutUser, type AuthedProfile } from "../../lib/auth";
+import { listUsers, updateUserRole, logRoleChange, dbRoleToUserRole, userRoleToDbRole, type DirectoryUser } from "../../lib/users";
 
 // ─── Admin Users ─────────────────────────────────────────────────────────────
 
@@ -20,6 +22,33 @@ type PlatformUser = {
   status: UserStatus;
   lastActive: string;
 };
+
+// Fields with no backing column in `profiles` today (department, active/
+// suspended status, last-active) stay cosmetic placeholders on real rows —
+// per scope, only view-users and edit-role are wired to Supabase. Guest
+// mode still renders the full mock dataset below, unchanged.
+const REAL_USER_PLACEHOLDER = { dept: "—", status: "Active" as UserStatus, lastActive: "—" };
+
+function formatJoined(iso: string): { joined: string; joinedSort: number } {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { joined: "—", joinedSort: 0 };
+  const joined = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const joinedSort = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  return { joined, joinedSort };
+}
+
+function toPlatformUser(u: DirectoryUser): PlatformUser {
+  const { joined, joinedSort } = formatJoined(u.memberSince);
+  return {
+    id: u.id,
+    name: u.fullName,
+    email: u.email,
+    role: dbRoleToUserRole(u.role),
+    joined,
+    joinedSort,
+    ...REAL_USER_PLACEHOLDER,
+  };
+}
 
 const PLATFORM_USERS: PlatformUser[] = [
   { id:"u1",  name:"Sarah Chen",          email:"s.chen@university.edu",        role:"Student",   dept:"Environmental Science", joined:"Sep 3, 2024",  joinedSort:20240903, status:"Active",    lastActive:"Today"       },
@@ -120,15 +149,36 @@ function UserOverflowMenu({
 // Role-change inline modal
 function EditRoleModal({
   user,
+  isSelf,
   onSave,
   onClose,
 }: {
   user: PlatformUser;
-  onSave: (id: string, role: UserRole) => void;
+  // True when the row being edited is the signed-in admin's own account.
+  // Guards against accidental self-lockout: an admin editing their own row
+  // can't select anything other than Admin, so there's no path to demote
+  // yourself out of admin access through this UI. This is a UX safeguard
+  // only — profiles_update_admin's RLS would still allow the write if it
+  // somehow reached the server, so it's not a security boundary, just a
+  // guardrail against a misclick.
+  isSelf: boolean;
+  onSave: (id: string, role: UserRole) => Promise<void>;
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState<UserRole>(user.role);
+  const [saving, setSaving] = useState(false);
   const roles: UserRole[] = ["Student", "Organizer", "Admin"];
+
+  async function handleSave() {
+    setSaving(true);
+    await onSave(user.id, selected);
+    // Whether it succeeded or the parent already toasted an error, the
+    // modal's job is done either way — the caller's state only actually
+    // changed on real success, so re-opening this same modal shows the
+    // unchanged role again if the write failed.
+    setSaving(false);
+    onClose();
+  }
   return (
     <motion.div className="fixed inset-0 z-50 flex items-center justify-center"
       initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
@@ -150,13 +200,16 @@ function EditRoleModal({
               <X size={13} strokeWidth={1.75} className="text-[#6B6355]" />
             </button>
           </div>
-          <div className="space-y-2 mb-5">
+          <div className="space-y-2 mb-4">
             {roles.map(r => {
               const c = ROLE_CONFIG[r];
               const active = selected === r;
+              const locked = isSelf && r !== "Admin";
               return (
-                <button key={r} type="button" onClick={() => setSelected(r)}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-[7px] border transition-colors text-left"
+                <button key={r} type="button" disabled={locked}
+                  onClick={() => setSelected(r)}
+                  title={locked ? "You can't remove your own admin access." : undefined}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-[7px] border transition-colors text-left disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ background: active ? c.bg : "transparent",
                            borderColor: active ? c.border : "#DCD4C2" }}>
                   <span className="w-3 h-3 rounded-full border-2 flex-shrink-0 flex items-center justify-center"
@@ -176,14 +229,20 @@ function EditRoleModal({
               );
             })}
           </div>
+          {isSelf && (
+            <p className="text-[9px] mb-3 -mt-1" style={{ ...M, color:"#9C8E7E" }}>
+              You can't demote your own account — ask another admin to change this if needed.
+            </p>
+          )}
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => { onSave(user.id, selected); onClose(); }}
-              className="flex-1 py-2.5 rounded-[6px] text-[12px] font-semibold transition-opacity hover:opacity-85"
+            <button type="button" onClick={handleSave} disabled={saving}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-[6px] text-[12px] font-semibold transition-opacity hover:opacity-85 disabled:opacity-60 disabled:cursor-not-allowed"
               style={{ background:"#E2A23B", color:"#1E1B16", fontFamily:"'Public Sans',system-ui,sans-serif" }}>
-              Save changes
+              {saving && <RefreshCw size={12} className="animate-spin" />}
+              {saving ? "Saving…" : "Save changes"}
             </button>
-            <button type="button" onClick={onClose}
-              className="px-4 py-2.5 rounded-[6px] text-[12px] font-medium border border-[#DCD4C2] text-[#6B6355] hover:border-[#1E1B16]/30 hover:text-[#1E1B16] transition-colors"
+            <button type="button" onClick={onClose} disabled={saving}
+              className="px-4 py-2.5 rounded-[6px] text-[12px] font-medium border border-[#DCD4C2] text-[#6B6355] hover:border-[#1E1B16]/30 hover:text-[#1E1B16] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
               Cancel
             </button>
@@ -281,8 +340,13 @@ function InviteUserModal({ onClose }: { onClose: () => void }) {
 
 const ALL_ROLES: Array<UserRole | "All"> = ["All","Student","Organizer","Admin"];
 
-export function UsersScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
-  const [users, setUsers] = useState<PlatformUser[]>(PLATFORM_USERS);
+export function UsersScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
+  // Guest mode never holds a real Supabase session, so profiles_select_admin
+  // would just return zero/one row anyway — skip the fetch entirely and show
+  // the mock dataset, same as every other screen's isGuest treatment.
+  const [users, setUsers] = useState<PlatformUser[]>(isGuest ? PLATFORM_USERS : []);
+  const [loading, setLoading] = useState(!isGuest);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<UserRole | "All">("All");
   const [statusFilter, setStatusFilter] = useState<UserStatus | "All">("All");
@@ -291,6 +355,24 @@ export function UsersScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) =
   const [showInvite, setShowInvite] = useState(false);
   const [sortKey, setSortKey] = useState<"name" | "joined" | "role">("joined");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    const result = await listUsers();
+    if (result.status === "error") {
+      setLoadError(result.message);
+      setLoading(false);
+      return;
+    }
+    setUsers(result.users.map(toPlatformUser));
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (isGuest) return;
+    void fetchUsers();
+  }, [isGuest, fetchUsers]);
 
   const filtered = users
     .filter(u => {
@@ -315,9 +397,55 @@ export function UsersScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) =
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
 
-  function handleEditRole(id: string, newRole: UserRole) {
+  async function handleEditRole(id: string, newRole: UserRole) {
+    // Guest mode has no real session to write with — keep it a local-only
+    // demo change, same as the rest of this screen's mock actions.
+    if (isGuest) {
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, role:newRole } : u));
+      toast.success("Role updated");
+      return;
+    }
+
+    // Backend-side belt-and-suspenders for the same rule EditRoleModal
+    // already enforces by disabling the other options: even if this
+    // handler were somehow called with a self-demotion (e.g. a future
+    // bulk-action path), refuse it here too rather than relying solely on
+    // the modal's disabled buttons.
+    if (profile?.id === id && newRole !== "Admin") {
+      toast.error("You can't remove your own admin access.");
+      return;
+    }
+
+    const target = users.find(u => u.id === id);
+    const oldRole = target?.role;
+
+    const result = await updateUserRole(id, newRole);
+
+    if (result.status === "error") {
+      toast.error(result.message);
+      return;
+    }
+
+    // Only reflect the change locally once Postgres/RLS actually confirmed
+    // it — the profiles_update_admin policy is the real gate, this is just
+    // reacting to its outcome.
     setUsers(prev => prev.map(u => u.id === id ? { ...u, role:newRole } : u));
     toast.success("Role updated");
+
+    // Best-effort audit entry — logged after the real change succeeded, so
+    // a logging hiccup never blocks or rolls back the role change itself.
+    // See logRoleChange()'s docstring for why this is fire-and-forget.
+    if (profile?.id && oldRole && oldRole !== newRole) {
+      const logResult = await logRoleChange({
+        actorId: profile.id,
+        targetId: id,
+        oldRole: userRoleToDbRole(oldRole),
+        newRole: userRoleToDbRole(newRole),
+      });
+      if (logResult.status === "error") {
+        console.error("Failed to write audit_log entry for role change:", logResult.message);
+      }
+    }
   }
 
   function handleToggleSuspend(id: string) {
@@ -365,12 +493,12 @@ export function UsersScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) =
   return (
     <AdminAppShell
       activeNav="admin-users"
-      adminName="Dr. Helena Marsh"
+      adminName={profile?.fullName ?? "Dr. Helena Marsh"}
       adminRole="Platform Administrator"
       pendingApprovals={0}
       notifCount={3}
       isGuest={isGuest}
-      onLogOut={() => onNavigate("admin-login")}
+      onLogOut={() => { void signOutUser(); onNavigate("admin-login"); }}
       onNav={id => {
         if (id === "profile")          { onNavigate("profile");          return; }
         if (id === "admin-dashboard")  { onNavigate("admin-dashboard");  return; }
@@ -512,8 +640,29 @@ export function UsersScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) =
 
         {/* ── Table rows ── */}
         <div className="" style={dotGrid}>
+          {loading && (
+            <div className="flex flex-col items-center justify-center h-48 gap-3">
+              <RefreshCw size={22} strokeWidth={1.5} className="text-[#9C8E7E] animate-spin" />
+              <span className="text-[12px] text-[#9C8E7E]" style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
+                Loading users…
+              </span>
+            </div>
+          )}
+          {!loading && loadError && (
+            <div className="flex flex-col items-center justify-center h-48 gap-3">
+              <span className="text-[12px] text-[#B5432E] text-center max-w-[380px]"
+                style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
+                Couldn't load users: {loadError}
+              </span>
+              <button type="button" onClick={() => void fetchUsers()}
+                className="flex items-center gap-1.5 px-3 py-[6px] rounded-[6px] text-[11px] font-semibold border border-[#DCD4C2] text-[#1E1B16] hover:bg-[#F6F1E7] transition-colors"
+                style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
+                <RefreshCw size={11} strokeWidth={1.75} /> Retry
+              </button>
+            </div>
+          )}
           <AnimatePresence initial={false}>
-            {filtered.length === 0 && (
+            {!loading && !loadError && filtered.length === 0 && (
               <motion.div key="empty" className="flex flex-col items-center justify-center h-48 gap-3"
                 initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}>
                 <Users size={28} strokeWidth={1} className="text-[#DCD4C2]" />
@@ -522,7 +671,7 @@ export function UsersScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) =
                 </span>
               </motion.div>
             )}
-            {filtered.map((u, i) => {
+            {!loading && !loadError && filtered.map((u, i) => {
               const isChecked = selected.has(u.id);
               const isSuspended = u.status === "Suspended";
               return (
@@ -625,6 +774,7 @@ export function UsersScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) =
       <AnimatePresence>
         {editUser && (
           <EditRoleModal key="edit-role" user={editUser}
+            isSelf={!isGuest && profile?.id === editUser.id}
             onSave={handleEditRole} onClose={() => setEditingId(null)} />
         )}
         {showInvite && (

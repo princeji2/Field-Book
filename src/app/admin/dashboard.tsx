@@ -4,6 +4,7 @@ import { Award, BarChart3, Check, ArrowRight, ChevronRight, CheckCircle2, AlertT
 import { toast } from "sonner";
 import { F, M, dotGrid, type Screen, CertificateSeal, parseMetricNum, StatMetricNumber } from "../shared";
 import { AdminAppShell } from "./shell";
+import { signOutUser, type AuthedProfile } from "../../lib/auth";
 
 // ─── Admin Dashboard ──────────────────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ function SeismographTrace({ width, height, rowCount, rowDelay }: {
   );
 }
 
-export function AdminDashboard({ onNavigate, livePendingApprovals, isGuest }: { onNavigate: (s: Screen) => void; livePendingApprovals?: number; isGuest?: boolean }) {
+export function AdminDashboard({ onNavigate, livePendingApprovals, isGuest, profile }: { onNavigate: (s: Screen) => void; livePendingApprovals?: number; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const pendingCount = livePendingApprovals ?? ADMIN_PENDING_APPROVALS.length;
   const activityRef  = useRef<HTMLDivElement>(null);
   const [activityWidth, setActivityWidth] = useState(0);
@@ -117,12 +118,12 @@ export function AdminDashboard({ onNavigate, livePendingApprovals, isGuest }: { 
   return (
     <AdminAppShell
       activeNav="admin-dashboard"
-      adminName="Dr. Helena Marsh"
+      adminName={profile?.fullName ?? "Dr. Helena Marsh"}
       adminRole="Platform Administrator"
       pendingApprovals={pendingCount}
       notifCount={3}
       isGuest={isGuest}
-      onLogOut={() => onNavigate("admin-login")}
+      onLogOut={() => { void signOutUser(); onNavigate("admin-login"); }}
       onNav={id => {
         if (id === "profile")         { onNavigate("profile");         return; }
         if (id === "admin-approvals") { onNavigate("admin-approvals"); return; }

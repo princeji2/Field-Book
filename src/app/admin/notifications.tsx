@@ -7,6 +7,7 @@ import {
 import { toast } from "sonner";
 import { F, M, dotGrid, type Screen, NOTIF_GROUPS, type NotifGroup } from "../shared";
 import { AdminAppShell } from "./shell";
+import { signOutUser, type AuthedProfile } from "../../lib/auth";
 
 // ─── Admin Notifications ─────────────────────────────────────────────────────
 
@@ -278,7 +279,7 @@ function AdminNotifRow({
   );
 }
 
-export function AdminNotifsScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
+export function AdminNotifsScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const [filter, setFilter]         = useState<"all" | AdminNotifCategory>("all");
   const [readIds, setReadIds]       = useState<string[]>([]);
   const [staggerDelays, setStaggerDelays] = useState<Record<string, number>>({});
@@ -319,13 +320,13 @@ export function AdminNotifsScreen({ onNavigate, isGuest }: { onNavigate: (s: Scr
   return (
     <AdminAppShell
       activeNav="admin-notifs"
-      adminName="Dr. Helena Marsh"
+      adminName={profile?.fullName ?? "Dr. Helena Marsh"}
       adminRole="Platform Administrator"
       pendingApprovals={0}
       notifCount={unreadCount}
       isGuest={isGuest}
       notifCountKey={unreadCount}
-      onLogOut={() => onNavigate("admin-login")}
+      onLogOut={() => { void signOutUser(); onNavigate("admin-login"); }}
       onNav={notifsNavHandler}
       topBarLeft={
         <div className="flex items-center gap-2.5">

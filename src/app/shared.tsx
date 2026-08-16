@@ -18,7 +18,7 @@ import {
   BarChart, Bar, Cell,
 } from "recharts";
 import { toast, Toaster } from "sonner";
-import { signUpWithProfile, roleToScreen, type SignupRole } from "../lib/auth";
+import { signUpWithProfile, roleToScreen, signOutUser, getCurrentUserProfile, type SignupRole, type AuthedProfile } from "../lib/auth";
 
 // ─── Typography shorthand ───────────────────────────────────────────────────
 export const F = { fontFamily: "'Fraunces', Georgia, serif" } as const;
@@ -85,7 +85,7 @@ export class ErrorBoundary extends Component<{ children: React.ReactNode }, EBSt
 }
 
 // ─── Screen type ────────────────────────────────────────────────────────────
-export type Screen = "landing" | "login" | "signup" | "forgot" | "dashboard" | "explore" | "details" | "myevents" | "scanner" | "certs" | "notifs" | "org-dashboard" | "org-events" | "org-events-create" | "org-qr" | "org-attendees" | "org-analytics" | "org-certs" | "admin-login" | "admin-role-confirm" | "admin-dashboard" | "admin-approvals" | "admin-users" | "admin-templates" | "admin-analytics" | "admin-settings" | "admin-notifs" | "profile";
+export type Screen = "landing" | "signup" | "forgot" | "dashboard" | "explore" | "details" | "myevents" | "scanner" | "certs" | "notifs" | "org-dashboard" | "org-events" | "org-events-create" | "org-qr" | "org-attendees" | "org-analytics" | "org-certs" | "admin-login" | "admin-role-confirm" | "admin-dashboard" | "admin-approvals" | "admin-users" | "admin-templates" | "admin-analytics" | "admin-settings" | "admin-notifs" | "profile";
 
 // ─── Scan demo data ─────────────────────────────────────────────────────────
 const SCAN_ROWS = [
@@ -644,243 +644,6 @@ export function GoogleGlyph() {
   );
 }
 
-// ─── Login page ──────────────────────────────────────────────────────────────
-export function LoginPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
-  const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [showPass, setShowPass] = useState(false);
-  const [errors, setErrors]     = useState({ email: "", password: "" });
-  const [phase, setPhase]       = useState<"idle" | "loading" | "success">("idle");
-
-  function validateEmail(v: string): string {
-    if (!v) return "Email address is required.";
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return "Enter a valid email address.";
-    return "";
-  }
-
-  function handleSubmit(ev: React.FormEvent) {
-    ev.preventDefault();
-    const emailErr = validateEmail(email);
-    const passErr  = password.trim() ? "" : "Password is required.";
-    setErrors({ email: emailErr, password: passErr });
-    if (emailErr || passErr) return;
-    setPhase("loading");
-    setTimeout(() => setPhase("success"), 1200);
-  }
-
-  useEffect(() => {
-    if (phase !== "success") return;
-    const t = setTimeout(() => onNavigate("dashboard"), 2000);
-    return () => clearTimeout(t);
-  }, [phase]);
-
-  return (
-    <div className="bg-[#F6F1E7] min-h-screen flex flex-col" style={dotGrid}>
-      <AuthHeader onBack={() => onNavigate("landing")} />
-
-      <main className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-[400px]">
-          <AuthCard
-            eyebrow="Student · Organizer · Admin"
-            title="Sign in to your record."
-            subtitle="Your role is resolved automatically after authentication."
-          >
-            <AnimatePresence mode="wait">
-
-              {/* ── Success state ── */}
-              {phase === "success" && (
-                <motion.div
-                  key="success"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.25 }}
-                  className="px-8 py-10 flex flex-col items-center text-center"
-                >
-                  <CertificateSeal size={80} rotate={-8} delay={0.15} />
-
-                  <h2 className="text-[1.35rem] font-semibold text-[#1E1B16] mt-6 mb-1.5" style={F}>
-                    Authenticated.
-                  </h2>
-                  <p className="text-sm text-[#6B6355] mb-6">
-                    Redirecting to your record…
-                  </p>
-
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#F6F1E7] border border-[#DCD4C2] rounded-full">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#2E6B4C] flex-shrink-0" />
-                    <span className="text-[9px] text-[#6B6355] max-w-[260px] truncate" style={M}>
-                      {email}
-                    </span>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* ── Form state (idle + loading) ── */}
-              {phase !== "success" && (
-                <motion.form
-                  key="form"
-                  onSubmit={handleSubmit}
-                  noValidate
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.25 }}
-                  className="px-8 py-7 space-y-5"
-                >
-                  {/* Email */}
-                  <div>
-                    <label
-                      htmlFor="login-email"
-                      className="block text-[9px] tracking-widest uppercase text-[#6B6355] mb-1.5"
-                      style={M}
-                    >
-                      Email Address
-                    </label>
-                    <input
-                      id="login-email"
-                      type="email"
-                      value={email}
-                      onChange={e => {
-                        setEmail(e.target.value);
-                        if (errors.email) setErrors(prev => ({ ...prev, email: "" }));
-                      }}
-                      onBlur={() => setErrors(prev => ({ ...prev, email: validateEmail(email) }))}
-                      placeholder="you@university.edu"
-                      autoComplete="email"
-                      className={`w-full bg-[#F6F1E7] border rounded-[7px] px-3 py-2.5 text-sm text-[#1E1B16] placeholder:text-[#DCD4C2] outline-none transition-colors ${
-                        errors.email
-                          ? "border-[#B5432E]"
-                          : "border-[#DCD4C2] focus:border-[#1E1B16]/40"
-                      }`}
-                    />
-                    {errors.email && (
-                      <p className="text-[9px] text-[#B5432E] mt-1.5" style={M}>
-                        {errors.email}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Password */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label
-                        htmlFor="login-password"
-                        className="text-[9px] tracking-widest uppercase text-[#6B6355]"
-                        style={M}
-                      >
-                        Password
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => onNavigate("forgot")}
-                        className="text-[9px] text-[#6B6355] hover:text-[#1E1B16] transition-colors leading-none"
-                        style={M}
-                      >
-                        Forgot password →
-                      </button>
-                    </div>
-                    <div
-                      className={`flex items-center bg-[#F6F1E7] border rounded-[7px] transition-colors ${
-                        errors.password
-                          ? "border-[#B5432E]"
-                          : "border-[#DCD4C2] focus-within:border-[#1E1B16]/40"
-                      }`}
-                    >
-                      <input
-                        id="login-password"
-                        type={showPass ? "text" : "password"}
-                        value={password}
-                        onChange={e => {
-                          setPassword(e.target.value);
-                          if (errors.password) setErrors(prev => ({ ...prev, password: "" }));
-                        }}
-                        onBlur={() =>
-                          setErrors(prev => ({
-                            ...prev,
-                            password: password.trim() ? "" : "Password is required.",
-                          }))
-                        }
-                        placeholder="••••••••••••"
-                        autoComplete="current-password"
-                        className="flex-1 bg-transparent px-3 py-2.5 text-sm text-[#1E1B16] placeholder:text-[#DCD4C2] outline-none min-w-0"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPass(v => !v)}
-                        aria-label={showPass ? "Hide password" : "Show password"}
-                        className="px-3 text-[#6B6355] hover:text-[#1E1B16] transition-colors flex-shrink-0 flex items-center"
-                        tabIndex={-1}
-                      >
-                        {showPass
-                          ? <EyeOff size={14} strokeWidth={1.5} />
-                          : <Eye    size={14} strokeWidth={1.5} />
-                        }
-                      </button>
-                    </div>
-                    {errors.password && (
-                      <p className="text-[9px] text-[#B5432E] mt-1.5" style={M}>
-                        {errors.password}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Submit */}
-                  <button
-                    type="submit"
-                    disabled={phase === "loading"}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {phase === "loading" ? "Signing in…" : <><span>Log In</span><ArrowRight size={13} /></>}
-                  </button>
-
-                  {/* Divider */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 border-t border-[#DCD4C2]" />
-                    <span
-                      className="text-[9px] text-[#6B6355] tracking-widest uppercase"
-                      style={M}
-                    >
-                      or
-                    </span>
-                    <div className="flex-1 border-t border-[#DCD4C2]" />
-                  </div>
-
-                  {/* Google */}
-                  <button
-                    type="button"
-                    className="w-full flex items-center justify-center gap-2.5 px-5 py-2.5 bg-[#F6F1E7] border border-[#DCD4C2] rounded-[7px] text-sm text-[#1E1B16] hover:border-[#1E1B16]/35 transition-colors"
-                  >
-                    <GoogleGlyph />
-                    Continue with Google
-                  </button>
-
-                  {/* Signup link */}
-                  <p className="text-center text-xs text-[#6B6355] pt-0.5">
-                    {"Don't have an account? "}
-                    <button
-                      type="button"
-                      onClick={() => onNavigate("admin-login")}
-                      className="text-[#1E1B16] font-medium hover:text-[#E2A23B] transition-colors"
-                    >
-                      Create one →
-                    </button>
-                  </p>
-                </motion.form>
-              )}
-
-            </AnimatePresence>
-          </AuthCard>
-
-          {/* Footnote */}
-          <p className="text-center text-[9px] text-[#6B6355] mt-5" style={M}>
-            Shared authentication — role is assigned after sign-in.
-          </p>
-        </div>
-      </main>
-    </div>
-  );
-}
-
 // ─── Password strength ────────────────────────────────────────────────────────
 export function getPasswordScore(p: string): 0 | 1 | 2 | 3 {
   if (!p) return 0;
@@ -917,7 +680,7 @@ export function StrengthMeter({ password }: { password: string }) {
 }
 
 // ─── Signup page ─────────────────────────────────────────────────────────────
-export function SignupPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
+export function SignupPage({ onNavigate, onAuthenticated }: { onNavigate: (s: Screen) => void; onAuthenticated?: (p: AuthedProfile) => void }) {
   const [name, setName]         = useState("");
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
@@ -975,6 +738,14 @@ export function SignupPage({ onNavigate }: { onNavigate: (s: Screen) => void }) 
       setPhase("success");
       return;
     }
+
+    // Immediate-session case: signUpWithProfile only tells us the role, but
+    // the on_auth_user_created trigger has already written the real
+    // profiles row by now, so fetch it once here to get id/fullName/email
+    // for App.tsx's single source of truth (same pattern as
+    // AdminLoginScreen's onAuthenticated call).
+    const freshProfile = await getCurrentUserProfile();
+    if (freshProfile) onAuthenticated?.(freshProfile);
 
     setConfirmedRole(result.role);
     setPhase("success");
@@ -1714,7 +1485,7 @@ export function AppShell({
                 <div className="py-1">
                   {([
                     { label: "My Profile", icon: User,   action: () => { setSidebarMenuOpen(false); onNavigate?.("profile"); }, danger: false },
-                    { label: "Log Out",    icon: LogOut, action: () => { setSidebarMenuOpen(false); onNavigate?.("landing"); }, danger: true  },
+                    { label: "Log Out",    icon: LogOut, action: () => { setSidebarMenuOpen(false); void signOutUser(); onNavigate?.("landing"); }, danger: true  },
                   ] as const).map(row => (
                     <button key={row.label} type="button" onClick={row.action}
                       className={`w-full flex items-center gap-3 px-4 py-[9px] text-[12px] text-left transition-colors ${
@@ -1792,7 +1563,7 @@ export function AppShell({
                       <div className="py-1">
                         {[
                           { label: "My Profile", icon: User,   action: () => { setAvatarMenuOpen(false); onNavigate?.("profile"); }, danger: false },
-                          { label: "Log Out",    icon: LogOut, action: () => { setAvatarMenuOpen(false); onNavigate?.("landing"); }, danger: true  },
+                          { label: "Log Out",    icon: LogOut, action: () => { setAvatarMenuOpen(false); void signOutUser(); onNavigate?.("landing"); }, danger: true  },
                         ].map(row => (
                           <button key={row.label} type="button" onClick={row.action}
                             className={`w-full flex items-center gap-3 px-4 py-[9px] text-[12px] text-left transition-colors ${

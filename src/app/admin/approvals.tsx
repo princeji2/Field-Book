@@ -4,6 +4,7 @@ import { Check, ArrowLeft, X, ChevronRight, XCircle, Clock, Calendar, MapPin, Us
 import { toast } from "sonner";
 import { F, M, dotGrid, type Screen, CertificateSeal } from "../shared";
 import { AdminAppShell } from "./shell";
+import { signOutUser, type AuthedProfile } from "../../lib/auth";
 
 // ─── Admin Approvals ─────────────────────────────────────────────────────────
 
@@ -116,7 +117,7 @@ function TypeBadge({ type }: { type: Approval["type"] }) {
   );
 }
 
-export function ApprovalsScreen({ onNavigate, onPendingChange, isGuest }: { onNavigate: (s: Screen) => void; onPendingChange?: (n: number) => void; isGuest?: boolean }) {
+export function ApprovalsScreen({ onNavigate, onPendingChange, isGuest, profile }: { onNavigate: (s: Screen) => void; onPendingChange?: (n: number) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const [tab, setTab] = useState<ApprovalTab>("Pending");
   const [approvals, setApprovals] = useState<Approval[]>(ALL_APPROVALS);
   const [panelId, setPanelId] = useState<string | null>(null);
@@ -201,13 +202,13 @@ export function ApprovalsScreen({ onNavigate, onPendingChange, isGuest }: { onNa
   return (
     <AdminAppShell
       activeNav="admin-approvals"
-      adminName="Dr. Helena Marsh"
+      adminName={profile?.fullName ?? "Dr. Helena Marsh"}
       adminRole="Platform Administrator"
       pendingApprovals={pendingCount}
       pendingApprovalsKey={badgePopKey}
       notifCount={3}
       isGuest={isGuest}
-      onLogOut={() => onNavigate("admin-login")}
+      onLogOut={() => { void signOutUser(); onNavigate("admin-login"); }}
       onNav={id => {
         if (id === "profile")         { onNavigate("profile");         return; }
         if (id === "admin-dashboard") { onNavigate("admin-dashboard"); return; }

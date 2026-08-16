@@ -6,7 +6,7 @@ import { F, M, dotGrid, type Screen, CertificateSeal } from "../shared";
 import { AdminAppShell, ROLE_CONFIG, type UserRole } from "./shell";
 import { ENGAGEMENT_BY_ROLE } from "./analytics";
 import { ProfileScreen } from "../profile";
-import { signIn, getCurrentUserProfile, roleToScreen } from "../../lib/auth";
+import { signIn, getCurrentUserProfile, roleToScreen, signOutUser, type AuthedProfile } from "../../lib/auth";
 
 // ─── Login Mascots ────────────────────────────────────────────────────────────
 
@@ -192,7 +192,7 @@ function MascotTrio({ passwordFocused }: { passwordFocused: boolean }) {
 
 // ─── Admin Login ─────────────────────────────────────────────────────────────
 
-export function AdminLoginScreen({ onNavigate, onGuestLogin }: { onNavigate: (s: Screen) => void; onGuestLogin?: () => void }) {
+export function AdminLoginScreen({ onNavigate, onGuestLogin, onAuthenticated }: { onNavigate: (s: Screen) => void; onGuestLogin?: () => void; onAuthenticated?: (p: AuthedProfile) => void }) {
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
@@ -233,6 +233,7 @@ export function AdminLoginScreen({ onNavigate, onGuestLogin }: { onNavigate: (s:
       return;
     }
 
+    onAuthenticated?.(profile);
     setResolvedScreen(roleToScreen(profile.role));
     setPhase("success");
   }
@@ -447,13 +448,22 @@ export function AdminRoleConfirmScreen({
   onNavigate,
   onRoleSelect,
   onGuestLogin,
+  profile,
 }: {
   onNavigate: (s: Screen) => void;
   onRoleSelect?: (role: "admin" | "org" | "student") => void;
   onGuestLogin?: () => void;
+  profile?: AuthedProfile | null;
 }) {
-  const accountName = "Dr. Helena Marsh";
+  const accountName = profile?.fullName ?? "Dr. Helena Marsh";
   const roles = DEMO_ROLE_OPTIONS;
+  // Re-declared (previously dropped in a refactor, leaving `singleRole` an
+  // undefined reference below — see the layout `style` on each role card).
+  // roles.length is always 3 today so this evaluates to false and changes
+  // no visible behavior; it just stops the component from throwing if
+  // rendered at all, regardless of entry path.
+  const availableRoles = roles.filter(r => r.available);
+  const singleRole = availableRoles.length === 1;
 
   const [selected,  setSelected]  = useState<string | null>(null);
   const [exiting, setExiting] = useState(false);
@@ -638,16 +648,16 @@ export function AdminRoleConfirmScreen({
 }
 
 // ─── Admin profile screen wrapper ─────────────────────────────────────────────
-export function AdminProfileScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
+export function AdminProfileScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   return (
     <AdminAppShell
       activeNav=""
-      adminName="Dr. Helena Marsh"
+      adminName={profile?.fullName ?? "Dr. Helena Marsh"}
       adminRole="Platform Administrator"
       pendingApprovals={0}
       notifCount={0}
       isGuest={isGuest}
-      onLogOut={() => onNavigate("admin-login")}
+      onLogOut={() => { void signOutUser(); onNavigate("admin-login"); }}
       onNav={id => {
         if (id === "admin-dashboard")  { onNavigate("admin-dashboard");  return; }
         if (id === "admin-approvals")  { onNavigate("admin-approvals");  return; }
@@ -660,8 +670,8 @@ export function AdminProfileScreen({ onNavigate, isGuest }: { onNavigate: (s: Sc
     >
       <ProfileScreen
         role="Admin"
-        name="Dr. Helena Marsh"
-        email="h.marsh@fieldbook.edu"
+        name={profile?.fullName ?? "Dr. Helena Marsh"}
+        email={profile?.email ?? "h.marsh@fieldbook.edu"}
         phone=""
         bio=""
         accountId="ADM-0001"

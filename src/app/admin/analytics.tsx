@@ -4,6 +4,7 @@ import { ArrowLeft, BarChart3, TrendingUp, Download } from "lucide-react";
 import { toast } from "sonner";
 import { F, M, dotGrid, type Screen, parseMetricNum, StatMetricNumber } from "../shared";
 import { AdminAppShell } from "./shell";
+import { signOutUser, type AuthedProfile } from "../../lib/auth";
 
 // ─── Admin Analytics ─────────────────────────────────────────────────────────
 
@@ -83,7 +84,7 @@ const TOP_EVENTS_PLATFORM = [
   { rank:5, title:"Computational Biology Bootcamp",  organizer:"Dr. Mei-Ling Zhao",  regs:40,  checkins:38,  rate:95 },
 ];
 
-export function AdminAnalyticsScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
+export function AdminAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const [dateRange, setDateRange] = useState<AdminDateRange>("30d");
   const [topTab, setTopTab] = useState<"organizers" | "events">("organizers");
   const [hoveredGrowthIdx, setHoveredGrowthIdx] = useState<number | null>(null);
@@ -119,12 +120,12 @@ export function AdminAnalyticsScreen({ onNavigate, isGuest }: { onNavigate: (s: 
   return (
     <AdminAppShell
       activeNav="admin-analytics"
-      adminName="Dr. Helena Marsh"
+      adminName={profile?.fullName ?? "Dr. Helena Marsh"}
       adminRole="Platform Administrator"
       pendingApprovals={0}
       notifCount={3}
       isGuest={isGuest}
-      onLogOut={() => onNavigate("admin-login")}
+      onLogOut={() => { void signOutUser(); onNavigate("admin-login"); }}
       onNav={adminNavHandler}
       topBarLeft={
         <div className="flex items-center gap-2.5">

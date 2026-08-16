@@ -24,6 +24,7 @@ import {
 } from "./shared";
 import { SealBadge } from "./student";
 import { ProfileScreen } from "./profile";
+import { signOutUser, type AuthedProfile } from "../lib/auth";
 
 // ─── Organizer shell ──────────────────────────────────────────────────────────
 
@@ -366,12 +367,12 @@ function OrgStatusBadge({ status }: { status: OrgEventStatus }) {
   );
 }
 
-export function OrganizerDashboard({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
+export function OrganizerDashboard({ onNavigate, isGuest, profile }: { onNavigate: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const [activeNav, setActiveNav] = useState("org-dashboard");
 
   function handleNav(id: string) {
     if (id === "profile")       { onNavigate("profile");       return; }
-    if (id === "landing")       { onNavigate("landing");       return; }
+    if (id === "landing")       { void signOutUser(); onNavigate("landing");       return; }
     if (id === "org-events")    { onNavigate("org-events");    return; }
     if (id === "org-qr")        { onNavigate("org-qr");        return; }
     if (id === "org-attendees") { onNavigate("org-attendees"); return; }
@@ -387,7 +388,7 @@ export function OrganizerDashboard({ onNavigate, isGuest }: { onNavigate: (s: Sc
   return (
     <OrgAppShell
       activeNav={activeNav}
-      orgName="Dr. Marcus Webb"
+      orgName={profile?.fullName ?? "Dr. Marcus Webb"}
       orgRole="Student Affairs Office"
       notifCount={2}
       onNav={handleNav}
@@ -784,7 +785,7 @@ function OrgMediaDropzone() {
   );
 }
 
-export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGuest }: { onNavigate: (s: Screen, id?: string) => void; initialView?: "list" | "create"; isGuest?: boolean }) {
+export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGuest, profile }: { onNavigate: (s: Screen, id?: string) => void; initialView?: "list" | "create"; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const [view, setView]           = useState<"list" | "create" | "edit">(initialView);
   const [editEvent, setEditEvent] = useState<OrgEvent | null>(null);
   const [statusTab, setStatusTab] = useState<"all" | OrgEventStatus>("all");
@@ -883,12 +884,12 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
   return (
     <OrgAppShell
       activeNav="org-events"
-      orgName="Dr. Marcus Webb"
+      orgName={profile?.fullName ?? "Dr. Marcus Webb"}
       orgRole="Student Affairs Office"
       notifCount={2}
       onNav={id => {
         if (id === "profile")        { onNavigate("profile");        return; }
-        if (id === "landing")        { onNavigate("landing");        return; }
+        if (id === "landing")        { void signOutUser(); onNavigate("landing");        return; }
         if (id === "org-dashboard")  { onNavigate("org-dashboard");  return; }
         if (id === "org-qr")         { onNavigate("org-qr");         return; }
         if (id === "org-attendees")  { onNavigate("org-attendees");  return; }
@@ -1280,14 +1281,14 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
               <a key={l} href="#" className="text-sm text-[#6B6355] hover:text-[#1E1B16] transition-colors duration-150">{l}</a>
             ))}
             <button
-              onClick={() => onNavigate("admin-role-confirm")}
+              onClick={() => onNavigate("admin-login")}
               className="text-sm text-[#6B6355] hover:text-[#1E1B16] transition-colors duration-150"
             >
               Sign in
             </button>
           </div>
           <button
-            onClick={() => onNavigate("admin-role-confirm")}
+            onClick={() => onNavigate("admin-login")}
             className="px-4 py-1.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors"
           >
             Get Started
@@ -1315,7 +1316,7 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
 
             <div className="flex items-center gap-4 flex-wrap mb-12">
               <button
-                onClick={() => onNavigate("admin-role-confirm")}
+                onClick={() => onNavigate("admin-login")}
                 className="flex items-center gap-2 px-6 py-3 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors"
               >
                 Get Started <ArrowRight size={14} />
@@ -1526,7 +1527,7 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
             </p>
             <div className="flex items-center justify-center gap-4 flex-wrap">
               <button
-                onClick={() => onNavigate("admin-role-confirm")}
+                onClick={() => onNavigate("admin-login")}
                 className="flex items-center gap-2 px-7 py-3 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors"
               >
                 {"Get Started — it's free"} <ArrowRight size={14} />
@@ -1703,7 +1704,7 @@ const DATE_RANGE_OPTIONS: { id: DateRange; label: string }[] = [
   { id: "all", label: "All time" },
 ];
 
-export function OrgAnalyticsScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
+export function OrgAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const [eventScope, setEventScope] = useState("all");
   const [dateRange, setDateRange] = useState<DateRange>("30d");
   const [hoveredRegIdx, setHoveredRegIdx] = useState<number | null>(null);
@@ -1711,7 +1712,7 @@ export function OrgAnalyticsScreen({ onNavigate, isGuest }: { onNavigate: (s: Sc
 
   function handleNav(id: string) {
     if (id === "profile")       { onNavigate("profile");       return; }
-    if (id === "landing")       { onNavigate("landing");       return; }
+    if (id === "landing")       { void signOutUser(); onNavigate("landing");       return; }
     if (id === "org-dashboard") { onNavigate("org-dashboard"); return; }
     if (id === "org-events")    { onNavigate("org-events");    return; }
     if (id === "org-qr")        { onNavigate("org-qr");        return; }
@@ -1737,7 +1738,7 @@ export function OrgAnalyticsScreen({ onNavigate, isGuest }: { onNavigate: (s: Sc
   return (
     <OrgAppShell
       activeNav="org-analytics"
-      orgName="Dr. Marcus Webb"
+      orgName={profile?.fullName ?? "Dr. Marcus Webb"}
       orgRole="Student Affairs Office"
       notifCount={2}
       onNav={handleNav}
@@ -2374,7 +2375,7 @@ function CertStatusPill({ status }: { status: CertRecipient["status"] }) {
 }
 
 
-export function OrgCertificatesScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
+export function OrgCertificatesScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const [recipients, setRecipients] = useState<CertRecipient[]>(INITIAL_RECIPIENTS);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [generating, setGenerating] = useState(false);
@@ -2423,7 +2424,7 @@ export function OrgCertificatesScreen({ onNavigate, isGuest }: { onNavigate: (s:
 
   function handleNav(id: string) {
     if (id === "profile")       { onNavigate("profile");       return; }
-    if (id === "landing")       { onNavigate("landing");       return; }
+    if (id === "landing")       { void signOutUser(); onNavigate("landing");       return; }
     if (id === "org-dashboard") { onNavigate("org-dashboard"); return; }
     if (id === "org-events")    { onNavigate("org-events");    return; }
     if (id === "org-qr")        { onNavigate("org-qr");        return; }
@@ -2434,7 +2435,7 @@ export function OrgCertificatesScreen({ onNavigate, isGuest }: { onNavigate: (s:
   return (
     <OrgAppShell
       activeNav="org-certs"
-      orgName="Dr. Marcus Webb" orgRole="Student Affairs Office" notifCount={2}
+      orgName={profile?.fullName ?? "Dr. Marcus Webb"} orgRole="Student Affairs Office" notifCount={2}
       onNav={handleNav}
       onCreateEvent={() => onNavigate("org-events")}
       isGuest={isGuest}
@@ -2736,7 +2737,7 @@ function OrgQRSvg({ seed, size }: { seed: number; size: number }) {
   );
 }
 
-export function OrgQRScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
+export function OrgQRScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const sessions = ORG_EVENTS.filter(e => e.status === "Live" || e.status === "Published");
   const defaultId = (sessions.find(e => e.status === "Live") ?? sessions[0])?.id ?? null;
 
@@ -2811,7 +2812,7 @@ export function OrgQRScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) =
 
   function handleNav(id: string) {
     if (id === "profile")       { onNavigate("profile");       return; }
-    if (id === "landing")       { onNavigate("landing");       return; }
+    if (id === "landing")       { void signOutUser(); onNavigate("landing");       return; }
     if (id === "org-dashboard") { onNavigate("org-dashboard"); return; }
     if (id === "org-events")    { onNavigate("org-events");    return; }
     if (id === "org-attendees") { onNavigate("org-attendees"); return; }
@@ -2822,7 +2823,7 @@ export function OrgQRScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) =
   return (
     <OrgAppShell
       activeNav="org-qr"
-      orgName="Dr. Marcus Webb"
+      orgName={profile?.fullName ?? "Dr. Marcus Webb"}
       orgRole="Student Affairs Office"
       notifCount={2}
       onNav={handleNav}
@@ -3155,10 +3156,12 @@ export function OrgAttendeesScreen({
   onNavigate,
   eventId = "oe4",
   isGuest,
+  profile,
 }: {
   onNavigate: (s: Screen, id?: string) => void;
   eventId?: string;
   isGuest?: boolean;
+  profile?: AuthedProfile | null;
 }) {
   const event     = ORG_EVENTS.find(e => e.id === eventId) ?? ORG_EVENTS[3];
   const attendees = ATTENDEES_BY_EVENT[eventId] ?? ATTENDEES_BY_EVENT["oe4"];
@@ -3170,7 +3173,7 @@ export function OrgAttendeesScreen({
 
   function handleNav(id: string) {
     if (id === "profile")       { onNavigate("profile");       return; }
-    if (id === "landing")       { onNavigate("landing");       return; }
+    if (id === "landing")       { void signOutUser(); onNavigate("landing");       return; }
     if (id === "org-dashboard") { onNavigate("org-dashboard"); return; }
     if (id === "org-events")    { onNavigate("org-events");    return; }
     if (id === "org-qr")        { onNavigate("org-qr");        return; }
@@ -3184,7 +3187,7 @@ export function OrgAttendeesScreen({
   return (
     <OrgAppShell
       activeNav="org-attendees"
-      orgName="Dr. Marcus Webb"
+      orgName={profile?.fullName ?? "Dr. Marcus Webb"}
       orgRole="Student Affairs Office"
       notifCount={2}
       onNav={handleNav}
@@ -3351,15 +3354,15 @@ export function OrgAttendeesScreen({
 }
 
 // ─── Organizer profile screen wrapper ─────────────────────────────────────────
-export function OrgProfileScreen({ onNavigate, isGuest }: { onNavigate: (s: Screen) => void; isGuest?: boolean }) {
+export function OrgProfileScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   return (
     <OrgAppShell
       activeNav=""
-      orgName="Dr. Marcus Webb"
+      orgName={profile?.fullName ?? "Dr. Marcus Webb"}
       orgRole="Student Affairs Office"
       notifCount={0}
       onNav={id => {
-        if (id === "landing")        { onNavigate("landing");        return; }
+        if (id === "landing")        { void signOutUser(); onNavigate("landing");        return; }
         if (id === "org-dashboard")  { onNavigate("org-dashboard");  return; }
         if (id === "org-events")     { onNavigate("org-events");     return; }
         if (id === "org-qr")         { onNavigate("org-qr");         return; }
@@ -3371,8 +3374,8 @@ export function OrgProfileScreen({ onNavigate, isGuest }: { onNavigate: (s: Scre
     >
       <ProfileScreen
         role="Organizer"
-        name="Dr. Marcus Webb"
-        email="m.webb@fieldbook.edu"
+        name={profile?.fullName ?? "Dr. Marcus Webb"}
+        email={profile?.email ?? "m.webb@fieldbook.edu"}
         phone=""
         bio=""
         accountId="ORG-0042"
