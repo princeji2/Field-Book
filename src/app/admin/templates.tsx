@@ -11,6 +11,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 import { F, M, dotGrid, type Screen, CertificateSeal, InlineSeal } from "../shared";
 import { AdminAppShell } from "./shell";
 import { signOutUser, type AuthedProfile } from "../../lib/auth";
+import { uploadToBucket, buildObjectPath } from "../../lib/storage";
+import { supabase } from "../../lib/supabaseClient";
 
 // ─── Certificate Templates ────────────────────────────────────────────────────
 
@@ -101,6 +103,34 @@ const SIZE_CLASS: Record<TemplateField["size"], string> = {
   md: "text-[1rem]",
   sm: "text-[0.7rem]",
 };
+
+/** Converts a <canvas> (a rendered PDF page) into a PNG File for Storage upload. */
+function canvasToPngFile(canvas: HTMLCanvasElement, originalName: string): Promise<File> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (!blob) { reject(new Error("Failed to encode canvas as PNG")); return; }
+      const baseName = originalName.replace(/\.[^.]+$/, "") || "certificate-design";
+      resolve(new File([blob], `${baseName}.png`, { type: "image/png" }));
+    }, "image/png");
+  });
+}
+
+/** Reads a File's natural width/height ratio without ever base64-encoding it — used only to size the preview, not to store the image. */
+function readImageAspectRatio(file: File): Promise<number | null> {
+  return new Promise(resolve => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      resolve(img.naturalWidth / img.naturalHeight);
+      URL.revokeObjectURL(objectUrl);
+    };
+    img.onerror = () => {
+      resolve(null);
+      URL.revokeObjectURL(objectUrl);
+    };
+    img.src = objectUrl;
+  });
+}
 
 function TemplateThumbnail({ template, scale = 1 }: { template: CertTemplate; scale?: number }) {
   const w = 320, h = 210;
@@ -293,6 +323,7 @@ function TemplateEditor({
   const [bgAspectRatio, setBgAspectRatio] = useState<number>(template.backgroundImageAspectRatio ?? 1.4142);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver]   = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
 
   const canvasRef    = useRef<HTMLDivElement>(null);
@@ -382,10 +413,21 @@ function TemplateEditor({
         canvas.height = viewport.height;
         const ctx = canvas.getContext("2d")!;
         await page.render({ canvasContext: ctx, viewport }).promise;
-        const dataUrl = canvas.toDataURL("image/png");
-        setBgImage(dataUrl);
+        // Rendered PDF page becomes a PNG upload — Storage stores the
+        // rendered image, not the original PDF bytes, matching what the
+        // canvas preview already shows.
+        const pngFile = await canvasToPngFile(canvas, file.name);
+        setIsUploading(true);
+        const result = await uploadToBucket("certificate-templates", buildObjectPath(template.id, pngFile), pngFile);
+        setIsUploading(false);
+        if (result.status === "error") {
+          setUploadError(result.message);
+          return;
+        }
+        setBgImage(result.publicUrl);
         setBgAspectRatio(viewport.width / viewport.height);
       } catch {
+        setIsUploading(false);
         setUploadError("Failed to process PDF. Please try again.");
       }
       return;
@@ -394,17 +436,20 @@ function TemplateEditor({
       setUploadError("Only PNG, JPG, and PDF files are accepted.");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = e => {
-      const url = e.target?.result as string;
-      const img = new Image();
-      img.onload = () => {
-        setBgImage(url);
-        setBgAspectRatio(img.naturalWidth / img.naturalHeight);
-      };
-      img.src = url;
-    };
-    reader.readAsDataURL(file);
+    const aspectRatio = await readImageAspectRatio(file);
+    if (aspectRatio === null) {
+      setUploadError("Could not read image. Please try a different file.");
+      return;
+    }
+    setIsUploading(true);
+    const result = await uploadToBucket("certificate-templates", buildObjectPath(template.id, file), file);
+    setIsUploading(false);
+    if (result.status === "error") {
+      setUploadError(result.message);
+      return;
+    }
+    setBgImage(result.publicUrl);
+    setBgAspectRatio(aspectRatio);
   }
 
   const handleFieldMouseDown = useCallback((id: string, e: React.MouseEvent) => {
@@ -650,12 +695,13 @@ function TemplateEditor({
       onDragLeave={() => setIsDragOver(false)}
       onDrop={e => {
         e.preventDefault(); setIsDragOver(false);
+        if (isUploading) return;
         const file = e.dataTransfer.files[0];
         if (file) processFile(file);
       }}
-      onClick={() => fileInputRef.current?.click()}
+      onClick={() => !isUploading && fileInputRef.current?.click()}
       style={{
-        width: CANVAS_W, height: 360, borderRadius:8, cursor:"pointer",
+        width: CANVAS_W, height: 360, borderRadius:8, cursor: isUploading ? "default" : "pointer",
         border: `1px dashed ${isDragOver ? "#E2A23B" : "#DCD4C2"}`,
         background: isDragOver ? "rgba(226,162,59,0.04)" : "#FCFAF3",
         display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
@@ -666,16 +712,20 @@ function TemplateEditor({
         style={{ display:"none" }}
         onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); e.target.value = ""; }}
       />
-      <Upload size={24} strokeWidth={1.5} style={{ color:"#DCD4C2" }} />
+      {isUploading
+        ? <RefreshCw size={24} strokeWidth={1.5} style={{ color:"#DCD4C2" }} className="animate-spin" />
+        : <Upload size={24} strokeWidth={1.5} style={{ color:"#DCD4C2" }} />}
       <div style={{ textAlign:"center" }}>
         <p style={{ fontFamily:"'Public Sans',system-ui,sans-serif", fontSize:13, color:"#1E1B16", marginBottom:4 }}>
-          Drag & drop your certificate design here
+          {isUploading ? "Uploading…" : "Drag & drop your certificate design here"}
         </p>
-        <p style={{ fontFamily:"'Public Sans',system-ui,sans-serif", fontSize:11, color:"#9C8E7E" }}>
-          or{" "}
-          <span style={{ textDecoration:"underline", color:"#1E1B16" }}>browse files</span>
-          {" "}· PNG or JPG · max 10 MB
-        </p>
+        {!isUploading && (
+          <p style={{ fontFamily:"'Public Sans',system-ui,sans-serif", fontSize:11, color:"#9C8E7E" }}>
+            or{" "}
+            <span style={{ textDecoration:"underline", color:"#1E1B16" }}>browse files</span>
+            {" "}· PNG or JPG · max 10 MB
+          </p>
+        )}
       </div>
       {uploadError && (
         <p style={{ fontFamily:"'Public Sans',system-ui,sans-serif", fontSize:11,
@@ -764,13 +814,15 @@ function TemplateEditor({
                     style={{ background:"rgba(30,27,22,0.45)" }}>
                     <button type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center gap-1 px-2 py-1 rounded-[4px] text-[9px] font-medium"
+                      disabled={isUploading}
+                      className="flex items-center gap-1 px-2 py-1 rounded-[4px] text-[9px] font-medium disabled:opacity-50"
                       style={{ background:"#F6F1E7", color:"#1E1B16", fontFamily:"'Public Sans',system-ui,sans-serif" }}>
-                      <RefreshCw size={9} strokeWidth={2} /> Replace
+                      <RefreshCw size={9} strokeWidth={2} className={isUploading ? "animate-spin" : undefined} /> Replace
                     </button>
                     <button type="button"
                       onClick={() => { setBgImage(null); setUploadError(null); }}
-                      className="flex items-center gap-1 px-2 py-1 rounded-[4px] text-[9px] font-medium"
+                      disabled={isUploading}
+                      className="flex items-center gap-1 px-2 py-1 rounded-[4px] text-[9px] font-medium disabled:opacity-50"
                       style={{ background:"rgba(181,67,46,0.12)", color:"#B5432E", fontFamily:"'Public Sans',system-ui,sans-serif" }}>
                       <Trash2 size={9} strokeWidth={2} /> Remove
                     </button>
@@ -779,9 +831,13 @@ function TemplateEditor({
               ) : (
                 <button type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-[5px] border border-dashed border-[#DCD4C2] text-[11px] text-[#6B6355] hover:border-[#9C8E7E] hover:text-[#1E1B16] transition-colors"
+                  disabled={isUploading}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-[5px] border border-dashed border-[#DCD4C2] text-[11px] text-[#6B6355] hover:border-[#9C8E7E] hover:text-[#1E1B16] transition-colors disabled:opacity-50"
                   style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
-                  <Upload size={11} strokeWidth={1.75} /> Upload image
+                  {isUploading
+                    ? <RefreshCw size={11} strokeWidth={1.75} className="animate-spin" />
+                    : <Upload size={11} strokeWidth={1.75} />}
+                  {isUploading ? "Uploading…" : "Upload image"}
                 </button>
               )}
               {uploadError && (
@@ -1015,6 +1071,10 @@ function UploadDesignScreen({
   const [isDragOver, setIsDragOver]       = useState(false);
   const [isProcessing, setIsProcessing]   = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // No template row exists yet at this step (it's created only once the
+  // user confirms with "Create template with this design"), so uploads
+  // here use a session-stable random prefix rather than a real template id.
+  const uploadPrefixRef = useRef<string>(`new-template-${Math.random().toString(36).slice(2)}`);
 
   const PS: React.CSSProperties = { fontFamily: "'Public Sans',system-ui,sans-serif" };
 
@@ -1038,6 +1098,9 @@ function UploadDesignScreen({
     }
 
     try {
+      let uploadFile: File;
+      let ratio: number;
+
       if (isPDF) {
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -1048,29 +1111,31 @@ function UploadDesignScreen({
         canvas.height = viewport.height;
         const ctx = canvas.getContext("2d")!;
         await page.render({ canvasContext: ctx, viewport }).promise;
-        const dataUrl = canvas.toDataURL("image/png");
-        setUploadedImage(dataUrl);
-        setAspectRatio(viewport.width / viewport.height);
+        uploadFile = await canvasToPngFile(canvas, file.name);
+        ratio = viewport.width / viewport.height;
       } else {
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = e => resolve(e.target?.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        const img = new Image();
-        img.onload = () => {
-          setAspectRatio(img.naturalWidth / img.naturalHeight);
-          setUploadedImage(dataUrl);
-          setIsProcessing(false);
-        };
-        img.onerror = () => {
+        const imgRatio = await readImageAspectRatio(file);
+        if (imgRatio === null) {
           setUploadError("Could not read image. Please try a different file.");
           setIsProcessing(false);
-        };
-        img.src = dataUrl;
+          return;
+        }
+        uploadFile = file;
+        ratio = imgRatio;
+      }
+
+      const result = await uploadToBucket(
+        "certificate-templates",
+        buildObjectPath(uploadPrefixRef.current, uploadFile),
+        uploadFile,
+      );
+      if (result.status === "error") {
+        setUploadError(result.message);
+        setIsProcessing(false);
         return;
       }
+      setAspectRatio(ratio);
+      setUploadedImage(result.publicUrl);
     } catch {
       setUploadError("Failed to process file. Please try again.");
     }
@@ -1174,16 +1239,18 @@ function UploadDesignScreen({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center gap-1.5 text-[11px] text-[#6B6355] hover:text-[#1E1B16] transition-colors"
+                  disabled={isProcessing}
+                  className="flex items-center gap-1.5 text-[11px] text-[#6B6355] hover:text-[#1E1B16] transition-colors disabled:opacity-50"
                   style={PS}
                 >
-                  <RefreshCw size={11} strokeWidth={1.75} /> Replace image
+                  <RefreshCw size={11} strokeWidth={1.75} className={isProcessing ? "animate-spin" : undefined} /> Replace image
                 </button>
                 <span className="text-[#DCD4C2] text-xs">·</span>
                 <button
                   type="button"
                   onClick={() => { setUploadedImage(null); setUploadError(null); }}
-                  className="flex items-center gap-1.5 text-[11px] transition-colors hover:opacity-70"
+                  disabled={isProcessing}
+                  className="flex items-center gap-1.5 text-[11px] transition-colors hover:opacity-70 disabled:opacity-50"
                   style={{ ...PS, color: "#B5432E" }}
                 >
                   <Trash2 size={11} strokeWidth={1.75} /> Remove
@@ -1222,6 +1289,16 @@ function UploadDesignScreen({
 }
 
 export function CertificateTemplatesScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
+  // The template list itself (name, fields, accent, ...) still persists to
+  // localStorage — that's the screen's existing mock-CRUD architecture and
+  // out of scope here (same pattern as ORG_EVENTS in organizer.tsx). What
+  // changed is background_image_url: it's a real Supabase Storage URL now,
+  // never base64, and handleSave below also attempts a real write of that
+  // URL to the certificate_templates row with a matching id — best-effort,
+  // since these mock ids ("t1", "t{timestamp}") aren't real UUIDs and won't
+  // match an actual row until template creation itself is wired to
+  // Supabase. Mirrors the same real-but-best-effort pattern used for
+  // events.qr_photo_url in organizer.tsx's OrgQRScreen.
   const [templates, setTemplates] = useState<CertTemplate[]>(() => {
     try {
       const raw = localStorage.getItem("fieldbook-templates");
@@ -1239,9 +1316,20 @@ export function CertificateTemplatesScreen({ onNavigate, isGuest, profile }: { o
   const [sourceChoice, setSourceChoice] = useState<"scratch" | "upload" | "pending" | null>(null);
   const [uploadRoute, setUploadRoute] = useState(false);
 
-  function handleSave(updated: CertTemplate) {
+  async function handleSave(updated: CertTemplate) {
     setTemplates(prev => prev.map(t => t.id === updated.id ? updated : t));
     setEditingTemplate(null);
+
+    const { error } = await supabase
+      .from("certificate_templates")
+      .update({
+        background_image_url: updated.backgroundImage ?? null,
+        aspect_ratio: updated.backgroundImageAspectRatio ?? null,
+      })
+      .eq("id", updated.id);
+    if (error) {
+      console.warn(`Saved template locally but couldn't sync background_image_url for ${updated.id}:`, error.message);
+    }
   }
 
   function handleSetDefault(id: string) {

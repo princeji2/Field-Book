@@ -4,6 +4,8 @@ import { motion } from "motion/react";
 import { ArrowLeft, Check, Upload, Trash2, RefreshCw, Eye, EyeOff, LogOut, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { F, M, dotGrid, type Screen } from "./shared";
+import { updateAvatarUrl } from "../lib/auth";
+import { uploadToBucket, buildObjectPath } from "../lib/storage";
 
 type ProfileRole = "Admin" | "Organizer" | "Student";
 
@@ -89,10 +91,12 @@ type StatItem = { label: string; value: string | number };
 
 export function ProfileScreen({
   role,
+  userId,
   name: initialName,
   email: initialEmail,
   phone: initialPhone = "",
   bio: initialBio = "",
+  avatarUrl: initialAvatarUrl = null,
   accountId,
   joinedDate,
   stats,
@@ -100,20 +104,27 @@ export function ProfileScreen({
   isGuest,
 }: {
   role: ProfileRole;
+  /** Real profiles.id (UUID) for the signed-in user. Undefined for guest sessions — avatar upload is disabled via isGuest in that case anyway. */
+  userId?: string;
   name: string;
   email: string;
   phone?: string;
   bio?: string;
+  /** Current avatar public URL from profiles.avatar_url, if any. */
+  avatarUrl?: string | null;
   accountId: string;
   joinedDate: string;
   stats?: StatItem[];
   onBack: () => void;
   isGuest?: boolean;
 }) {
+  // Notification preferences and name/email/phone/bio edits are still
+  // local-only (no notifications table / profile-fields update wired up
+  // yet) — only the avatar is backed by real Supabase Storage + the
+  // profiles.avatar_url column now, per the file-storage migration step.
   const [_p] = useState<{
     name?: string; email?: string; phone?: string; bio?: string;
     notifCerts?: boolean; notifEvents?: boolean; notifDigest?: boolean; notifPush?: boolean;
-    avatarUrl?: string | null;
   }>(() => {
     try {
       const raw = localStorage.getItem(`fieldbook-profile-${role}`);
@@ -143,11 +154,12 @@ export function ProfileScreen({
 
   const [showDeactivate, setShowDeactivate] = useState(false);
 
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(_p.avatarUrl ?? null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(initialAvatarUrl);
   const [isDirty, setIsDirty]     = useState(false);
   const [saving, setSaving]       = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const rs = ROLE_STYLES[role];
@@ -165,15 +177,27 @@ export function ProfileScreen({
     setIsDirty(false);
   }
 
-  function handleSave() {
+  async function handleSave() {
     setSaving(true);
-    const snapshot = { name, email, phone, bio, notifCerts, notifEvents, notifDigest, notifPush, avatarUrl };
-    setTimeout(() => {
-      setSaving(false);
-      setIsDirty(false);
-      try { localStorage.setItem(`fieldbook-profile-${role}`, JSON.stringify(snapshot)); } catch {}
-      toast.success("Profile updated");
-    }, 600);
+    // Name/email/phone/bio/notification prefs remain local-only for now.
+    const snapshot = { name, email, phone, bio, notifCerts, notifEvents, notifDigest, notifPush };
+    try { localStorage.setItem(`fieldbook-profile-${role}`, JSON.stringify(snapshot)); } catch {}
+
+    // avatarUrl is the one real field here — persist it to profiles.avatar_url
+    // so it survives a refresh/re-login instead of only living in this
+    // session's state.
+    if (userId) {
+      const result = await updateAvatarUrl(userId, avatarUrl);
+      if (result.status === "error") {
+        setSaving(false);
+        toast.error("Couldn't save profile photo", { description: result.message });
+        return;
+      }
+    }
+
+    setSaving(false);
+    setIsDirty(false);
+    toast.success("Profile updated");
   }
 
   function handleUpdatePassword() {
@@ -198,13 +222,31 @@ export function ProfileScreen({
     toast.success("Signed out of all other devices");
   }
 
-  function processAvatarFile(file: File) {
+  async function processAvatarFile(file: File) {
     setUploadError(null);
     if (file.size > 5 * 1024 * 1024) { setUploadError("Image exceeds 5 MB."); return; }
     if (!file.type.startsWith("image/")) { setUploadError("Only image files are accepted."); return; }
-    const reader = new FileReader();
-    reader.onload = e => { setAvatarUrl(e.target?.result as string); markDirty(); };
-    reader.readAsDataURL(file);
+
+    if (!userId) {
+      // Guest session — isGuest already disables the upload zone via the
+      // disabled state below, but guard here too in case this is ever
+      // called without that check.
+      setUploadError("Sign in to upload a profile photo.");
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    const path = buildObjectPath(userId, file);
+    const result = await uploadToBucket("avatars", path, file);
+    setIsUploadingAvatar(false);
+
+    if (result.status === "error") {
+      setUploadError(result.message);
+      return;
+    }
+
+    setAvatarUrl(result.publicUrl);
+    markDirty();
   }
 
   const inputCls = "w-full px-3 py-[9px] text-[12px] bg-[#F6F1E7] border border-[#DCD4C2] rounded-[6px] text-[#1E1B16] placeholder:text-[#9C8E7E] focus:outline-none focus:border-[#1E1B16] transition-colors";
@@ -294,8 +336,8 @@ export function ProfileScreen({
             <div
               onDragOver={e => { e.preventDefault(); setIsDragOver(true); }}
               onDragLeave={() => setIsDragOver(false)}
-              onDrop={e => { e.preventDefault(); setIsDragOver(false); const f = e.dataTransfer.files[0]; if (f) processAvatarFile(f); }}
-              onClick={() => fileInputRef.current?.click()}
+              onDrop={e => { e.preventDefault(); setIsDragOver(false); if (isUploadingAvatar) return; const f = e.dataTransfer.files[0]; if (f) processAvatarFile(f); }}
+              onClick={() => !isUploadingAvatar && fileInputRef.current?.click()}
               className="flex items-center gap-4 p-4 rounded-[6px] cursor-pointer transition-colors"
               style={{
                 border: `1px dashed ${isDragOver ? "#E2A23B" : "#DCD4C2"}`,
@@ -311,13 +353,15 @@ export function ProfileScreen({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[12px] font-medium text-[#1E1B16]" style={PS}>
-                  {avatarUrl ? "Replace photo" : "Upload a photo"}
+                  {isUploadingAvatar ? "Uploading…" : avatarUrl ? "Replace photo" : "Upload a photo"}
                 </p>
                 <p className="text-[10px] mt-0.5" style={{ ...PS, color: "#9C8E7E" }}>
                   Drag here or click to browse
                 </p>
               </div>
-              <Upload size={14} strokeWidth={1.5} style={{ color: "#DCD4C2" }} className="flex-shrink-0" />
+              {isUploadingAvatar
+                ? <RefreshCw size={14} strokeWidth={1.5} style={{ color: "#DCD4C2" }} className="flex-shrink-0 animate-spin" />
+                : <Upload size={14} strokeWidth={1.5} style={{ color: "#DCD4C2" }} className="flex-shrink-0" />}
             </div>
             {uploadError && (
               <p className="text-[11px] mt-1" style={{ ...PS, color: "#B5432E" }}>{uploadError}</p>

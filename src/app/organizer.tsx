@@ -25,6 +25,8 @@ import {
 import { SealBadge } from "./student";
 import { ProfileScreen } from "./profile";
 import { signOutUser, type AuthedProfile } from "../lib/auth";
+import { uploadToBucket, buildObjectPath } from "../lib/storage";
+import { supabase } from "../lib/supabaseClient";
 
 // ─── Organizer shell ──────────────────────────────────────────────────────────
 
@@ -2746,19 +2748,19 @@ export function OrgQRScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: 
   const [regenFading, setRegenFading] = useState(false);
   const [closedIds, setClosedIds]   = useState<Set<string>>(new Set());
   const [qrSource, setQrSource]     = useState<"generated" | "upload">("generated");
-  const [uploadedQrByEvent, setUploadedQrByEvent] = useState<Record<string, string | null>>(() => {
-    try {
-      const raw = localStorage.getItem("fieldbook-qr-uploads");
-      return raw ? (JSON.parse(raw) as Record<string, string | null>) : {};
-    } catch { return {}; }
-  });
+  // In-memory only now — no longer persisted to localStorage as base64.
+  // The real store is events.qr_photo_url (see handleQrFileSelect below);
+  // this map just mirrors it for the current session's UI. ORG_EVENTS is
+  // still mock data with non-UUID ids ("oe1", "oe2", ...), so the Supabase
+  // update below is a real, correctly-written call that will no-op today
+  // (no matching events row) until events are wired to real Supabase data —
+  // flagged rather than skipped, since the upload-to-Storage half is real
+  // regardless of whether the events table has a row to attach it to yet.
+  const [uploadedQrByEvent, setUploadedQrByEvent] = useState<Record<string, string | null>>({});
   const [qrUploadError, setQrUploadError] = useState<string | null>(null);
   const [qrDragOver, setQrDragOver] = useState(false);
+  const [isUploadingQr, setIsUploadingQr] = useState(false);
   const qrFileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    try { localStorage.setItem("fieldbook-qr-uploads", JSON.stringify(uploadedQrByEvent)); } catch {}
-  }, [uploadedQrByEvent]);
 
   const event  = selectedId ? ORG_EVENTS.find(e => e.id === selectedId) ?? null : null;
   const isLive = !!event && event.status === "Live" && !closedIds.has(event.id);
@@ -2776,7 +2778,7 @@ export function OrgQRScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: 
     }, 155);
   }
 
-  function handleQrFileSelect(file: File) {
+  async function handleQrFileSelect(file: File) {
     setQrUploadError(null);
     if (!file.type.startsWith("image/")) {
       setQrUploadError("Only PNG and JPG files are supported.");
@@ -2786,28 +2788,50 @@ export function OrgQRScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: 
       setQrUploadError("File must be under 5 MB.");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string;
-      if (selectedId) {
-        setUploadedQrByEvent(prev => ({ ...prev, [selectedId]: dataUrl }));
-      }
-    };
-    reader.readAsDataURL(file);
+    if (!selectedId) return;
+
+    setIsUploadingQr(true);
+    const path = buildObjectPath(selectedId, file);
+    const result = await uploadToBucket("qr-photos", path, file);
+    setIsUploadingQr(false);
+
+    if (result.status === "error") {
+      setQrUploadError(result.message);
+      return;
+    }
+
+    setUploadedQrByEvent(prev => ({ ...prev, [selectedId]: result.publicUrl }));
+
+    // Best-effort — see the state comment above re: mock event ids.
+    const { error } = await supabase
+      .from("events")
+      .update({ qr_photo_url: result.publicUrl })
+      .eq("id", selectedId);
+    if (error) {
+      console.warn(`Uploaded QR photo but couldn't save it to event ${selectedId}:`, error.message);
+    }
   }
 
   function handleQrDrop(e: React.DragEvent) {
     e.preventDefault();
     setQrDragOver(false);
+    if (isUploadingQr) return;
     const file = e.dataTransfer.files[0];
     if (file) handleQrFileSelect(file);
   }
 
-  function handleQrRemove() {
-    if (selectedId) {
-      setUploadedQrByEvent(prev => ({ ...prev, [selectedId]: null }));
-    }
+  async function handleQrRemove() {
+    if (!selectedId) return;
+    setUploadedQrByEvent(prev => ({ ...prev, [selectedId]: null }));
     setQrUploadError(null);
+
+    const { error } = await supabase
+      .from("events")
+      .update({ qr_photo_url: null })
+      .eq("id", selectedId);
+    if (error) {
+      console.warn(`Cleared QR photo locally but couldn't clear it on event ${selectedId}:`, error.message);
+    }
   }
 
   function handleNav(id: string) {
@@ -3008,7 +3032,7 @@ export function OrgQRScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: 
                             onChange={e => { const f = e.target.files?.[0]; if (f) handleQrFileSelect(f); e.target.value = ""; }}
                           />
                           <div
-                            onClick={() => qrFileInputRef.current?.click()}
+                            onClick={() => !isUploadingQr && qrFileInputRef.current?.click()}
                             onDragOver={e => { e.preventDefault(); setQrDragOver(true); }}
                             onDragLeave={() => setQrDragOver(false)}
                             onDrop={handleQrDrop}
@@ -3018,18 +3042,22 @@ export function OrgQRScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: 
                               background: qrDragOver ? "rgba(107,99,85,0.05)" : "transparent",
                             }}>
                             <div className="w-10 h-10 rounded-full border border-[#DCD4C2] bg-[#F6F1E7] flex items-center justify-center">
-                              <ImagePlus size={18} strokeWidth={1.3} color="#9C8E7E" />
+                              {isUploadingQr
+                                ? <RefreshCw size={18} strokeWidth={1.3} color="#9C8E7E" className="animate-spin" />
+                                : <ImagePlus size={18} strokeWidth={1.3} color="#9C8E7E" />}
                             </div>
                             <div className="text-center">
                               <p className="text-[12px] text-[#1E1B16]"
                                 style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
-                                Drop your QR image here
+                                {isUploadingQr ? "Uploading…" : "Drop your QR image here"}
                               </p>
-                              <p className="text-[11px] mt-0.5"
-                                style={{ fontFamily: "'Public Sans',system-ui,sans-serif", color: "#9C8E7E" }}>
-                                or{" "}
-                                <span className="underline cursor-pointer text-[#6B6355]">browse files</span>
-                              </p>
+                              {!isUploadingQr && (
+                                <p className="text-[11px] mt-0.5"
+                                  style={{ fontFamily: "'Public Sans',system-ui,sans-serif", color: "#9C8E7E" }}>
+                                  or{" "}
+                                  <span className="underline cursor-pointer text-[#6B6355]">browse files</span>
+                                </p>
+                              )}
                               <p className="text-[9px] mt-2 tracking-wide" style={{ ...M, color: "#9C8E7E" }}>
                                 PNG or JPG · max 5 MB
                               </p>
@@ -3374,10 +3402,12 @@ export function OrgProfileScreen({ onNavigate, isGuest, profile }: { onNavigate:
     >
       <ProfileScreen
         role="Organizer"
+        userId={profile?.id}
         name={profile?.fullName ?? "Dr. Marcus Webb"}
         email={profile?.email ?? "m.webb@fieldbook.edu"}
         phone=""
         bio=""
+        avatarUrl={profile?.avatarUrl}
         accountId="ORG-0042"
         joinedDate="Sep 4, 2024"
         stats={[

@@ -2850,10 +2850,12 @@ export function StudentProfileScreen({ onNavigate, isGuest, profile }: { onNavig
     >
       <ProfileScreen
         role="Student"
+        userId={profile?.id}
         name={profile?.fullName ?? "Sarah Chen"}
         email={profile?.email ?? "s.chen@fieldbook.edu"}
         phone=""
         bio=""
+        avatarUrl={profile?.avatarUrl}
         accountId="SCH-4421"
         joinedDate="Sep 1, 2024"
         stats={[

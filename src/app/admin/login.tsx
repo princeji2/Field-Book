@@ -670,10 +670,12 @@ export function AdminProfileScreen({ onNavigate, isGuest, profile }: { onNavigat
     >
       <ProfileScreen
         role="Admin"
+        userId={profile?.id}
         name={profile?.fullName ?? "Dr. Helena Marsh"}
         email={profile?.email ?? "h.marsh@fieldbook.edu"}
         phone=""
         bio=""
+        avatarUrl={profile?.avatarUrl}
         accountId="ADM-0001"
         joinedDate="Aug 12, 2024"
         stats={[

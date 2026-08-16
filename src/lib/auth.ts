@@ -18,6 +18,7 @@ export interface AuthedProfile {
   fullName: string;
   email: string;
   role: AppRole;
+  avatarUrl: string | null;
 }
 
 /** Maps a profile role to that role's existing dashboard screen. */
@@ -49,7 +50,7 @@ export async function getCurrentUserProfile(): Promise<AuthedProfile | null> {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, email, role")
+    .select("id, full_name, email, role, avatar_url")
     .eq("id", user.id)
     .single();
 
@@ -60,7 +61,26 @@ export async function getCurrentUserProfile(): Promise<AuthedProfile | null> {
     fullName: data.full_name as string,
     email: data.email as string,
     role: data.role as AppRole,
+    avatarUrl: (data.avatar_url as string | null) ?? null,
   };
+}
+
+/**
+ * Updates the calling user's own avatar_url. Gated by profiles_update_own
+ * (auth.uid() = id) — a user can only ever update their own row this way.
+ * Pass null to clear the avatar (matches the "Remove photo" UI action).
+ */
+export async function updateAvatarUrl(
+  userId: string,
+  avatarUrl: string | null,
+): Promise<{ status: "success" } | { status: "error"; message: string }> {
+  const { error } = await supabase
+    .from("profiles")
+    .update({ avatar_url: avatarUrl })
+    .eq("id", userId);
+
+  if (error) return { status: "error", message: error.message };
+  return { status: "success" };
 }
 
 export type SignUpResult =
