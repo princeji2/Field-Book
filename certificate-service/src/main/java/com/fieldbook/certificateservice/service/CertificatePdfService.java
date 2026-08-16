@@ -8,8 +8,6 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDFont;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.springframework.stereotype.Service;
 
@@ -20,7 +18,15 @@ import java.util.Map;
 
 /**
  * Renders a certificate PDF by placing the supplied text values onto the
- * background image at the coordinates defined in the template's fields JSON.
+ * background image at the coordinates defined in the template's fields
+ * JSON, then stamping a static reproduction of the Fieldbook Seal
+ * (see {@link CertificateSealRenderer}) in the bottom-right corner.
+ *
+ * <p>Typography and color follow the frozen Fieldbook design system
+ * (see {@code .kiro/steering/design-system.md}): Fraunces / Public Sans /
+ * IBM Plex Mono are embedded via {@link CertificateFonts} rather than
+ * substituted with PDFBox's Standard-14 fonts, and the Seal uses the exact
+ * Ink ({@code #1E1B16}) / Marigold ({@code #E2A23B}) tokens.</p>
  *
  * <h3>Coordinate system</h3>
  * <ul>
@@ -56,6 +62,15 @@ public class CertificatePdfService {
     );
 
     /**
+     * Seal placement, per the design-system's "Certificate card pattern":
+     * "One Seal (size 60–88 px) bottom-right, rotate between −7° and −11°".
+     * Fixed at the midpoint of both ranges for deterministic output.
+     */
+    private static final float SEAL_SIZE_PT = 74f;
+    private static final float SEAL_ROTATE_DEG = -9f;
+    private static final float SEAL_MARGIN_PT = 40f;
+
+    /**
      * Renders the certificate as a PDF and returns the raw bytes.
      *
      * @param template         template row fetched from Supabase (must have a background image URL)
@@ -84,6 +99,7 @@ public class CertificatePdfService {
 
             PDImageXObject background = PDImageXObject.createFromByteArray(
                     document, backgroundImage, "background");
+            CertificateFonts fonts = new CertificateFonts(document);
 
             try (PDPageContentStream content = new PDPageContentStream(document, page)) {
                 // Draw the template's background image edge-to-edge.
@@ -98,9 +114,16 @@ public class CertificatePdfService {
                         String text = fieldValues.get(field.getId());
                         if (text == null || text.isBlank()) continue; // only stamp the three we care about
 
-                        stampField(content, field, text, pageWidth, pageHeight, scale);
+                        stampField(content, fonts, field, text, pageWidth, pageHeight, scale);
                     }
                 }
+
+                // Static Seal, bottom-right — see CertificateSealRenderer for the
+                // point-for-point reproduction of the React CertificateSeal component.
+                float sealCx = pageWidth - SEAL_MARGIN_PT - SEAL_SIZE_PT / 2f;
+                float sealCy = SEAL_MARGIN_PT + SEAL_SIZE_PT / 2f;
+                CertificateSealRenderer.draw(content, sealCx, sealCy, SEAL_SIZE_PT,
+                        SEAL_ROTATE_DEG, fonts.getMonoMedium());
             }
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -114,9 +137,9 @@ public class CertificatePdfService {
         }
     }
 
-    private void stampField(PDPageContentStream content, TemplateField field, String text,
-                            float pageWidth, float pageHeight, float scale) throws IOException {
-        PDFont font = resolveFont(field.getFontFamily());
+    private void stampField(PDPageContentStream content, CertificateFonts fonts, TemplateField field,
+                            String text, float pageWidth, float pageHeight, float scale) throws IOException {
+        PDFont font = fonts.get(CertificateFonts.roleFor(field.getFontFamily()));
         float fontSize = resolveFontSize(field.getSize()) * scale;
 
         float centerX = clampPercent(field.getX()) / 100f * pageWidth;
@@ -132,6 +155,8 @@ public class CertificatePdfService {
         float x = centerX - textWidth / 2f;
         float y = centerY - (ascent + descent) / 2f;
 
+        // Ink token (#1E1B16) — all text in the design system, not pure black.
+        content.setNonStrokingColor(0x1E / 255f, 0x1B / 255f, 0x16 / 255f);
         content.beginText();
         content.setFont(font, fontSize);
         content.newLineAtOffset(x, y);
@@ -142,18 +167,6 @@ public class CertificatePdfService {
     private static float clampPercent(double v) {
         if (Double.isNaN(v)) return 50f;
         return (float) Math.max(0.0, Math.min(100.0, v));
-    }
-
-    private static PDFont resolveFont(String family) {
-        // Standard-14 fonts avoid the need to embed anything and cover the three
-        // families the frontend exposes. Names get stamped with a bold weight
-        // for readability, matching the frontend's font-weight:600 styling.
-        String f = family == null ? "serif" : family.toLowerCase();
-        return switch (f) {
-            case "mono" -> new PDType1Font(Standard14Fonts.FontName.COURIER_BOLD);
-            case "sans" -> new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD);
-            default -> new PDType1Font(Standard14Fonts.FontName.TIMES_BOLD);
-        };
     }
 
     private static float resolveFontSize(String size) {

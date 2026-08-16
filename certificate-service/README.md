@@ -208,11 +208,23 @@ certificate-service/
 - **Bucket policies.** Only the `certificates` bucket needs to be public; the
   `certificate-templates` bucket that stores backgrounds can remain private if the service
   key has read access to it (which it does by default).
-- **Fonts.** The service uses the PDFBox Standard-14 fonts (Times, Helvetica, Courier),
-  mapped from the template's `fontFamily` value. If you need the exact serif and mono faces
-  the frontend uses (Fraunces, IBM Plex Mono), embed those fonts and switch
-  `CertificatePdfService.resolveFont` to load them from `PDType0Font.load(...)`.
+- **Fonts.** The service embeds the actual design-system typefaces — Fraunces (serif),
+  Public Sans (sans), and IBM Plex Mono (mono) — as subsetted `PDType0Font`s, mapped from
+  the template's `fontFamily` value via `CertificateFonts`. Static SemiBold/Medium `.ttf`
+  files live in `src/main/resources/fonts/` (SIL Open Font License 1.1 — see
+  `fonts/OFL.txt` and the project root's `ATTRIBUTIONS.md`); no Standard-14 substitution is
+  used.
 - **Font sizes.** The `size` categories (`xl`/`lg`/`md`/`sm`) are matched to the frontend
   editor's canvas at 560px wide, then scaled proportionally to the actual PDF width. If
   templates look off after real-world testing, tweak `FRONTEND_FONT_SIZES` in
   `CertificatePdfService` or the `BASE_PAGE_WIDTH`.
+- **The Seal.** `CertificateSealRenderer` draws a static, non-animated reproduction of the
+  `CertificateSeal` React component (scalloped ring, arc text, checkmark) directly with
+  PDFBox path primitives — see its class doc for the exact geometry mapping and the one
+  known approximation (PDFBox has no text-on-a-path primitive, so arc-text glyphs are
+  placed and rotated individually along the curve).
+- **Visual QA.** `CertificateSampleRenderTest` (in `src/test`) generates a sample
+  certificate PDF and a PNG rendition of it under `target/sample-output/`, and asserts the
+  embedded fonts aren't silently falling back to Standard-14. Run it with
+  `mvn test -Dtest=CertificateSampleRenderTest` after touching font embedding or Seal
+  geometry, and compare the PNG against the in-app certificate preview.
