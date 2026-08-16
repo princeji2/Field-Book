@@ -49,6 +49,8 @@ supported and the first one that has a value wins:
 | `SUPABASE_SERVICE_KEY`          | Yes      | Service-role key for the project. Bypasses RLS — server-side use only.       |
 | `SUPABASE_CERTIFICATES_BUCKET`  | No       | Storage bucket name for generated PDFs. Defaults to `certificates`.          |
 | `SUPABASE_TEMPLATES_TABLE`      | No       | Table name for templates. Defaults to `certificate_templates`.               |
+| `PORT`                          | No       | Port to listen on. Defaults to `8081` locally. Most PaaS hosts (Render, Railway) inject this automatically — don't set it yourself there. |
+| `FRONTEND_ORIGIN`               | No       | CORS-allowed origin(s) for the deployed frontend (comma-separated if more than one), e.g. `https://fieldbook.example.com`. `http://localhost:5173` is always allowed regardless of this value — see `WebConfig`. |
 
 The `certificates` bucket must exist and be **public** for the returned URLs to be
 directly accessible. Create it in the Supabase dashboard (Storage → New bucket → mark as

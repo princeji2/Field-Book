@@ -23,6 +23,7 @@ import {
 } from "./shared";
 import { ProfileScreen } from "./profile";
 import { type AuthedProfile } from "../lib/auth";
+import { generateCertificate, generateCertificateCode } from "../lib/certificates";
 
 // ─── Student Dashboard ────────────────────────────────────────────────────────
 export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
@@ -1186,7 +1187,22 @@ type MyRegisteredEvent = {
   checkInOpensAt?: string;
   attended?: boolean;
   certIssued?: boolean;
+  // Id of the certificate_templates row to render this event's certificate
+  // onto. The real `events` table has no template linkage yet (organizer
+  // event-creation doesn't assign one) — this is a placeholder until that
+  // exists. TEST_CERT_TEMPLATE_ID below is a one-off row seeded directly in
+  // Supabase for local testing; do not treat this as how template
+  // selection will work once events are wired to real data.
+  certTemplateId?: string;
 };
+
+// One-off test fixture: a `certificate_templates` row named
+// "TEST TEMPLATE - DELETE ME" inserted directly via the service-role key so
+// the real /api/certificates/generate success path could be exercised
+// end-to-end before events carry their own template id. Delete this
+// constant (and the Supabase row it points to) once events have real
+// template linkage.
+const TEST_CERT_TEMPLATE_ID = "b7f12cf1-23fd-4161-8fd4-f186f79edef4";
 
 const MY_UPCOMING: MyRegisteredEvent[] = [
   { id: "mu1", title: "Environmental Policy Symposium",      category: "Academic",   date: "Nov 14, 2024", time: "9:00 – 11:30 AM",    venue: "Whitman Hall, Rm 204",         code: "ENV-POL-2024",  checkInOpen: true  },
@@ -1199,8 +1215,8 @@ const MY_UPCOMING: MyRegisteredEvent[] = [
 const MY_PAST: MyRegisteredEvent[] = [
   { id: "mp1", title: "Campus Sustainability Forum",         category: "Academic",   date: "Oct 8, 2024",  time: "10:00 AM – 1:00 PM", venue: "Whitman Hall, Rm 101",          code: "SUS-FOR-2024",  attended: true,  certIssued: true  },
   { id: "mp2", title: "Research Methodology Bootcamp",       category: "Research",   date: "Oct 15, 2024", time: "9:00 AM – 3:00 PM",  venue: "Library, Study Room A",         code: "RES-MTH-2024",  attended: true,  certIssued: true  },
-  { id: "mp3", title: "Foundations of Data Science",         category: "Workshop",   date: "Oct 24, 2024", time: "2:00 – 5:00 PM",     venue: "Engineering Hall, Lab 3",       code: "DATA-SCI-2024", attended: true,  certIssued: false },
-  { id: "mp4", title: "Public Speaking Intensive",           category: "Workshop",   date: "Nov 1, 2024",  time: "1:00 – 4:00 PM",     venue: "Arts Building, Studio 1",       code: "SPK-INT-2024",  attended: true,  certIssued: false },
+  { id: "mp3", title: "Foundations of Data Science",         category: "Workshop",   date: "Oct 24, 2024", time: "2:00 – 5:00 PM",     venue: "Engineering Hall, Lab 3",       code: "DATA-SCI-2024", attended: true,  certIssued: false, certTemplateId: TEST_CERT_TEMPLATE_ID },
+  { id: "mp4", title: "Public Speaking Intensive",           category: "Workshop",   date: "Nov 1, 2024",  time: "1:00 – 4:00 PM",     venue: "Arts Building, Studio 1",       code: "SPK-INT-2024",  attended: true,  certIssued: false, certTemplateId: TEST_CERT_TEMPLATE_ID },
   { id: "mp5", title: "Social Impact Hackathon",             category: "Leadership", date: "Nov 7, 2024",  time: "9:00 AM – 6:00 PM",  venue: "Student Union, Ground Floor",   code: "SOC-HACK-2024", attended: false, certIssued: false },
 ];
 
@@ -1309,15 +1325,31 @@ function UpcomingRow({
 function PastRow({
   ev,
   certGotten,
+  certUrl,
   onGetCert,
   isGuest,
 }: {
   ev: MyRegisteredEvent;
   certGotten: boolean;
-  onGetCert: () => void;
+  certUrl?: string;
+  onGetCert: () => Promise<void>;
   isGuest?: boolean;
 }) {
   const attended = ev.attended !== false;
+  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  async function handleClick() {
+    setStatus("loading");
+    setErrorMessage(null);
+    try {
+      await onGetCert();
+      setStatus("idle");
+    } catch (err) {
+      setStatus("error");
+      setErrorMessage(err instanceof Error ? err.message : "Certificate generation failed.");
+    }
+  }
 
   return (
     <div className="bg-[#FCFAF3] border border-[#1E1B16]/20 rounded-[8px] px-5 py-4 flex items-center gap-5">
@@ -1346,24 +1378,39 @@ function PastRow({
       </div>
 
       {/* Certificate action */}
-      <div className="w-48 flex-shrink-0 flex justify-end">
+      <div className="w-48 flex-shrink-0 flex flex-col items-end gap-1">
         {!attended ? (
           <span className="text-base text-[#DCD4C2]">—</span>
         ) : (
           <AnimatePresence mode="wait">
             {certGotten ? (
-              <motion.div
+              <motion.a
                 key="cert-done"
+                href={certUrl}
+                target="_blank"
+                rel="noopener noreferrer"
                 initial={{ opacity: 0, scale: 0.85 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.25, ease: "easeOut" }}
-                className="flex items-center gap-2.5"
+                className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
+                title={certUrl ? "View / download certificate" : undefined}
               >
                 <CertificateSeal size={44} rotate={-9} delay={0.1} />
                 <div className="space-y-0.5">
                   <div className="text-[8px] font-medium text-[#2E6B4C]" style={M}>Certificate Issued</div>
                   <div className="text-[8px] text-[#6B6355]" style={M}>{ev.code}</div>
                 </div>
+              </motion.a>
+            ) : status === "loading" ? (
+              <motion.div
+                key="cert-loading"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex items-center gap-1.5 px-4 py-2 border border-[#1E1B16]/25 text-xs text-[#6B6355] rounded-[7px]"
+              >
+                <RefreshCw size={12} className="animate-spin" />
+                Generating…
               </motion.div>
             ) : (
               <motion.button
@@ -1371,7 +1418,7 @@ function PastRow({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                onClick={onGetCert}
+                onClick={handleClick}
                 disabled={isGuest}
                 title={isGuest ? "Disabled in guest mode" : undefined}
                 className="flex items-center gap-1.5 px-4 py-2 border border-[#1E1B16]/25 text-xs text-[#1E1B16] rounded-[7px] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1381,6 +1428,16 @@ function PastRow({
               </motion.button>
             )}
           </AnimatePresence>
+        )}
+        {status === "error" && errorMessage && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-[9px] text-[#B5432E] text-right leading-snug max-w-[190px]"
+            style={M}
+          >
+            {errorMessage}
+          </motion.p>
         )}
       </div>
     </div>
@@ -1401,6 +1458,31 @@ export function MyEventsScreen({
   const [tab,          setTab]          = useState<"upcoming" | "past">("upcoming");
   const [checkedInIds, setCheckedInIds] = useState<string[]>([]);
   const [certGottenIds, setCertGottenIds] = useState<string[]>([]);
+  // Maps event id -> the Storage URL certificate-service returned for it,
+  // so PastRow can link straight to the generated PDF once issued.
+  const [certUrls, setCertUrls] = useState<Record<string, string>>({});
+
+  async function handleGetCertificate(ev: MyRegisteredEvent) {
+    if (!ev.certTemplateId) {
+      throw new Error("This event has no certificate template configured yet.");
+    }
+
+    const result = await generateCertificate({
+      studentName: profile?.fullName ?? "Sarah Chen",
+      eventTitle: ev.title,
+      templateId: ev.certTemplateId,
+      certificateCode: generateCertificateCode(),
+      studentId: profile?.id,
+    });
+
+    if (result.status === "error") {
+      throw new Error(result.message);
+    }
+
+    setCertUrls(prev => ({ ...prev, [ev.id]: result.certificateUrl }));
+    setCertGottenIds(prev => [...prev, ev.id]);
+    toast.success("Certificate issued", { description: "Your certificate is ready to view." });
+  }
 
   function handleNav(id: string) {
     if (id === "profile")   { onNavigate("profile");   return; }
@@ -1556,7 +1638,8 @@ export function MyEventsScreen({
                         <PastRow
                           ev={ev}
                           certGotten={certGottenIds.includes(ev.id) || !!ev.certIssued}
-                          onGetCert={() => setCertGottenIds(p => [...p, ev.id])}
+                          certUrl={certUrls[ev.id]}
+                          onGetCert={() => handleGetCertificate(ev)}
                           isGuest={isGuest}
                         />
                       </motion.div>

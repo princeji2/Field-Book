@@ -21,7 +21,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Thin wrapper around the Supabase PostgREST and Storage HTTP APIs. Only
@@ -153,6 +155,67 @@ public class SupabaseClient {
         }
 
         return props.getUrl() + "/storage/v1/object/public/" + bucket + "/" + encodedPath;
+    }
+
+    /**
+     * Inserts one row into {@code public.certificates} right after a
+     * generated PDF has been uploaded to Storage. Called with the
+     * service-role key, so this bypasses RLS by design — it is the sole
+     * write path for issuing a certificate row (see
+     * {@code certificates_insert_admin} in the RLS migration; students have
+     * no client-side insert policy on this table, and this call happens
+     * server-side instead of from the browser).
+     *
+     * @param eventId          nullable — {@code certificates.event_id} allows null
+     * @param studentId        nullable — {@code certificates.student_id} allows null
+     * @param templateId       nullable — {@code certificates.template_id} allows null
+     * @param certificateCode  required, unique per row
+     * @param certificateUrl   the public Storage URL just uploaded to
+     * @throws SupabaseIntegrationException on any non-2xx response or network failure
+     */
+    public void insertCertificateRecord(String eventId, String studentId, String templateId,
+                                        String certificateCode, String certificateUrl) {
+        requireConfigured();
+
+        String url = props.getUrl() + "/rest/v1/certificates";
+
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("event_id", blankToNull(eventId));
+        row.put("student_id", blankToNull(studentId));
+        row.put("template_id", blankToNull(templateId));
+        row.put("certificate_code", certificateCode);
+        row.put("certificate_url", certificateUrl);
+
+        try {
+            restClient.post()
+                    .uri(url)
+                    .header("apikey", props.getServiceKey())
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + props.getServiceKey())
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+                    // Minimal return avoids pulling the row back over the wire —
+                    // the caller already has everything it needs (certificateUrl).
+                    .header("Prefer", "return=minimal")
+                    .body(row)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, res) -> {
+                        throw new SupabaseIntegrationException(
+                                "PostgREST returned " + res.getStatusCode()
+                                        + " when inserting certificate row for code "
+                                        + certificateCode + ": " + readBody(res.getBody()));
+                    })
+                    .toBodilessEntity();
+        } catch (SupabaseIntegrationException e) {
+            throw e;
+        } catch (RestClientException e) {
+            throw new SupabaseIntegrationException(
+                    "Failed to reach Supabase PostgREST to insert certificate row for code "
+                            + certificateCode, e);
+        }
+    }
+
+    private static String blankToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s;
     }
 
     private void requireConfigured() {

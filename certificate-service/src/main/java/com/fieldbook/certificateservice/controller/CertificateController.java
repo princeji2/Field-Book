@@ -36,8 +36,9 @@ public class CertificateController {
     }
 
     /**
-     * Generates a certificate PDF from a Supabase-backed template and
-     * uploads it to the {@code certificates} Storage bucket.
+     * Generates a certificate PDF from a Supabase-backed template, uploads
+     * it to the {@code certificates} Storage bucket, and records the issued
+     * certificate.
      *
      * <p>Flow:</p>
      * <ol>
@@ -47,8 +48,20 @@ public class CertificateController {
      *       {@code certificateCode} onto the image at the positions defined
      *       in {@code fields}.</li>
      *   <li>Upload the finished PDF to Supabase Storage.</li>
+     *   <li>Insert a row into {@code certificates} (event_id, student_id,
+     *       template_id, certificate_code, certificate_url) using the
+     *       service-role key — the only write path for this table; see
+     *       {@link SupabaseClient#insertCertificateRecord}.</li>
      *   <li>Return the public URL as {@code { "certificateUrl": ... }}.</li>
      * </ol>
+     *
+     * <p>The Storage upload and the certificates-table insert are not
+     * wrapped in a single transaction (they're two different backends —
+     * Storage and PostgREST). If the insert fails after a successful
+     * upload, the PDF still exists in Storage and the generated URL is
+     * still valid; only the row bookkeeping is missing. That failure
+     * surfaces to the caller as a 502 rather than being swallowed, so it's
+     * visible rather than silently lost.</p>
      *
      * @return 200 with the public URL, 400 for validation errors, 404 if the
      *         template id doesn't exist, 502 for other Supabase failures.
@@ -71,6 +84,12 @@ public class CertificateController {
         );
 
         String publicUrl = storageService.uploadCertificate(pdfBytes, request.certificateCode());
+
+        supabase.insertCertificateRecord(
+                request.eventId(), request.studentId(), request.templateId(),
+                request.certificateCode(), publicUrl
+        );
+
         return ResponseEntity.ok(new CertificateResponse(publicUrl));
     }
 }
