@@ -6,6 +6,7 @@ import { F, M, dotGrid, type Screen, CertificateSeal } from "../shared";
 import { AdminAppShell, ROLE_CONFIG, type UserRole } from "./shell";
 import { ENGAGEMENT_BY_ROLE } from "./analytics";
 import { ProfileScreen } from "../profile";
+import { signIn, getCurrentUserProfile, roleToScreen } from "../../lib/auth";
 
 // ─── Login Mascots ────────────────────────────────────────────────────────────
 
@@ -197,23 +198,43 @@ export function AdminLoginScreen({ onNavigate, onGuestLogin }: { onNavigate: (s:
   const [showPass, setShowPass] = useState(false);
   const [emailErr, setEmailErr] = useState("");
   const [passErr,  setPassErr]  = useState("");
+  const [authErr,  setAuthErr]  = useState("");
   const [phase,    setPhase]    = useState<"idle" | "loading" | "success">("idle");
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
+  const [resolvedScreen, setResolvedScreen] = useState<Screen>("admin-role-confirm");
 
   useEffect(() => {
     if (phase !== "success") return;
-    const t = setTimeout(() => onNavigate("admin-role-confirm"), 1600);
+    const t = setTimeout(() => onNavigate(resolvedScreen), 1600);
     return () => clearTimeout(t);
-  }, [phase]);
+  }, [phase, resolvedScreen]);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const ee = email.trim()    ? (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? "Enter a valid email address." : "") : "Email is required.";
     const pe = password.trim() ? "" : "Password is required.";
     setEmailErr(ee); setPassErr(pe);
     if (ee || pe) return;
+
+    setAuthErr("");
     setPhase("loading");
-    setTimeout(() => setPhase("success"), 1100);
+
+    const { error } = await signIn(email, password);
+    if (error) {
+      setAuthErr(error.message);
+      setPhase("idle");
+      return;
+    }
+
+    const profile = await getCurrentUserProfile();
+    if (!profile) {
+      setAuthErr("We couldn't find an account profile for this login. Contact an administrator.");
+      setPhase("idle");
+      return;
+    }
+
+    setResolvedScreen(roleToScreen(profile.role));
+    setPhase("success");
   }
 
   return (
@@ -326,6 +347,11 @@ export function AdminLoginScreen({ onNavigate, onGuestLogin }: { onNavigate: (s:
                   )}
                 </div>
 
+                {authErr && (
+                  <p className="text-[10px] text-[#B5432E] -mt-1"
+                    style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>{authErr}</p>
+                )}
+
                 <button type="submit"
                   disabled={phase === "loading"}
                   className="w-full flex items-center justify-center gap-2 py-[10px] rounded-[6px] text-[12px] font-semibold bg-[#1E1B16] text-[#F6F1E7] hover:bg-[#2E2A24] disabled:opacity-60 transition-colors"
@@ -365,13 +391,20 @@ export function AdminLoginScreen({ onNavigate, onGuestLogin }: { onNavigate: (s:
                   Continue as Guest (View Only)
                 </button>
 
-                <div className="text-center pt-1">
+                <div className="text-center pt-1 space-y-2">
                   <button type="button"
                     onClick={() => onNavigate("forgot")}
-                    className="text-[11px] text-[#6B6355] hover:text-[#1E1B16] transition-colors"
+                    className="block mx-auto text-[11px] text-[#6B6355] hover:text-[#1E1B16] transition-colors"
                     style={{ fontFamily:"'Public Sans',system-ui,sans-serif",
                       borderBottom:"1px solid rgba(107,99,85,0.35)", paddingBottom:"1px" }}>
                     Forgot password?
+                  </button>
+                  <button type="button"
+                    onClick={() => onNavigate("signup")}
+                    className="block mx-auto text-[11px] text-[#6B6355] hover:text-[#1E1B16] transition-colors"
+                    style={{ fontFamily:"'Public Sans',system-ui,sans-serif",
+                      borderBottom:"1px solid rgba(107,99,85,0.35)", paddingBottom:"1px" }}>
+                    Don't have an account? Create one
                   </button>
                 </div>
 

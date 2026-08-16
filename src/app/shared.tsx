@@ -18,6 +18,7 @@ import {
   BarChart, Bar, Cell,
 } from "recharts";
 import { toast, Toaster } from "sonner";
+import { signUpWithProfile, roleToScreen, type SignupRole } from "../lib/auth";
 
 // ─── Typography shorthand ───────────────────────────────────────────────────
 export const F = { fontFamily: "'Fraunces', Georgia, serif" } as const;
@@ -924,10 +925,20 @@ export function SignupPage({ onNavigate }: { onNavigate: (s: Screen) => void }) 
   const [showPass, setShowPass] = useState(false);
   const [showConf, setShowConf] = useState(false);
   const [terms, setTerms]       = useState(false);
+  const [role, setRole]         = useState<SignupRole | null>(null);
   const [errors, setErrors]     = useState({
-    name: "", email: "", password: "", confirm: "", terms: "",
+    name: "", email: "", password: "", confirm: "", terms: "", role: "",
   });
   const [phase, setPhase] = useState<"idle" | "loading" | "success">("idle");
+  const [authErr, setAuthErr] = useState("");
+  // True when signUpWithProfile returns "confirmation_required" — the success
+  // panel is reused visually, but with different copy and no navigation,
+  // since there's no session yet to send the user into a dashboard with.
+  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+  // The role actually confirmed by signUpWithProfile's success result, used
+  // for the post-signup navigation target (kept separate from `role` state
+  // just for clarity of what actually succeeded vs. what's currently selected).
+  const [confirmedRole, setConfirmedRole] = useState<SignupRole | null>(null);
 
   function validateEmail(v: string) {
     if (!v) return "College email is required.";
@@ -935,7 +946,7 @@ export function SignupPage({ onNavigate }: { onNavigate: (s: Screen) => void }) 
     return "";
   }
 
-  function handleSubmit(ev: React.FormEvent) {
+  async function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault();
     const next = {
       name:     name.trim()    ? "" : "Full name is required.",
@@ -943,21 +954,40 @@ export function SignupPage({ onNavigate }: { onNavigate: (s: Screen) => void }) 
       password: password.length >= 8 ? "" : "Password must be at least 8 characters.",
       confirm:  confirm === password ? "" : "Passwords do not match.",
       terms:    terms ? "" : "You must accept the terms to continue.",
+      role:     role ? "" : "Choose a role to continue.",
     };
     setErrors(next);
     if (Object.values(next).some(Boolean)) return;
+
+    setAuthErr("");
     setPhase("loading");
-    setTimeout(() => setPhase("success"), 1200);
+
+    const result = await signUpWithProfile({ email, password, fullName: name, role: role! });
+
+    if (result.status === "error") {
+      setAuthErr(result.message);
+      setPhase("idle");
+      return;
+    }
+
+    if (result.status === "confirmation_required") {
+      setAwaitingConfirmation(true);
+      setPhase("success");
+      return;
+    }
+
+    setConfirmedRole(result.role);
+    setPhase("success");
   }
 
   const clearErr = (field: keyof typeof errors) =>
     setErrors(prev => ({ ...prev, [field]: "" }));
 
   useEffect(() => {
-    if (phase !== "success") return;
-    const t = setTimeout(() => onNavigate("dashboard"), 2000);
+    if (phase !== "success" || awaitingConfirmation) return;
+    const t = setTimeout(() => onNavigate(roleToScreen(confirmedRole ?? "student")), 2000);
     return () => clearTimeout(t);
-  }, [phase]);
+  }, [phase, awaitingConfirmation, confirmedRole]);
 
   const inputClass = (err: string) =>
     `w-full bg-[#F6F1E7] border rounded-[7px] px-3 py-2.5 text-sm text-[#1E1B16] placeholder:text-[#DCD4C2] outline-none transition-colors ${
@@ -978,7 +1008,7 @@ export function SignupPage({ onNavigate }: { onNavigate: (s: Screen) => void }) 
           <AuthCard
             eyebrow="Student · Organizer · Admin"
             title="Create your account."
-            subtitle="Your role is resolved automatically after your first sign-in."
+            subtitle="Choose your role below to get started."
           >
             <AnimatePresence mode="wait">
 
@@ -994,10 +1024,12 @@ export function SignupPage({ onNavigate }: { onNavigate: (s: Screen) => void }) 
                 >
                   <CertificateSeal size={80} rotate={-9} delay={0.15} />
                   <h2 className="text-[1.35rem] font-semibold text-[#1E1B16] mt-6 mb-1.5" style={F}>
-                    Account created.
+                    {awaitingConfirmation ? "Almost there." : "Account created."}
                   </h2>
                   <p className="text-sm text-[#6B6355] mb-6">
-                    Welcome to Fieldbook. Setting up your record…
+                    {awaitingConfirmation
+                      ? "Check your email to confirm your account before signing in."
+                      : "Welcome to Fieldbook. Setting up your record…"}
                   </p>
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#F6F1E7] border border-[#DCD4C2] rounded-full">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#2E6B4C] flex-shrink-0" />
@@ -1043,6 +1075,36 @@ export function SignupPage({ onNavigate }: { onNavigate: (s: Screen) => void }) 
                     />
                     {errors.name && (
                       <p className="text-[9px] text-[#B5432E] mt-1.5" style={M}>{errors.name}</p>
+                    )}
+                  </div>
+
+                  {/* Role */}
+                  <div>
+                    <label className="block text-[9px] tracking-widest uppercase text-[#6B6355] mb-1.5" style={M}>
+                      I'm signing up as
+                    </label>
+                    <div className="flex gap-2">
+                      {(["student", "organizer"] as const).map(r => {
+                        const selected = role === r;
+                        return (
+                          <button
+                            key={r}
+                            type="button"
+                            onClick={() => { setRole(r); clearErr("role"); }}
+                            aria-pressed={selected}
+                            className={`flex-1 px-4 py-2.5 text-sm font-medium rounded-[7px] border transition-colors ${
+                              selected
+                                ? "bg-[#E2A23B] text-[#1E1B16] border-[#1E1B16]/15"
+                                : "bg-[#F6F1E7] text-[#1E1B16] border-[#1E1B16]/25 hover:border-[#1E1B16]/50"
+                            }`}
+                          >
+                            {r === "student" ? "I'm a Student" : "I'm an Organizer"}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {errors.role && (
+                      <p className="text-[9px] text-[#B5432E] mt-1.5" style={M}>{errors.role}</p>
                     )}
                   </div>
 
@@ -1195,6 +1257,10 @@ export function SignupPage({ onNavigate }: { onNavigate: (s: Screen) => void }) 
                       <p className="text-[9px] text-[#B5432E] mt-1.5 ml-7" style={M}>{errors.terms}</p>
                     )}
                   </div>
+
+                  {authErr && (
+                    <p className="text-[9px] text-[#B5432E] -mt-1" style={M}>{authErr}</p>
+                  )}
 
                   {/* Submit */}
                   <button
