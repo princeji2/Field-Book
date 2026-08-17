@@ -21,4 +21,22 @@ if (!url || !anonKey) {
   );
 }
 
-export const supabase = createClient(url, anonKey);
+export const supabase = createClient(url, anonKey, {
+  auth: {
+    // The auth-js default is flowType: "implicit" (tokens in the URL
+    // fragment). PKCE (an auth *code* in the URL query string, exchanged
+    // for a session client-side) is what Supabase currently recommends for
+    // browser apps doing an OAuth redirect — added here for Google sign-in
+    // (see lib/auth.ts signInWithGoogle()). detectSessionInUrl: true means
+    // the client detects and exchanges that code for a session on its own
+    // during initialization, the moment the page loads at /auth/callback —
+    // no manual exchangeCodeForSession() call needed anywhere in this app.
+    // persistSession/autoRefreshToken are unchanged from the library
+    // defaults; listed explicitly so all four auth options that matter for
+    // this flow are visible together in one place.
+    flowType: "pkce",
+    detectSessionInUrl: true,
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+});

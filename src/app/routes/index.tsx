@@ -7,6 +7,7 @@ import { AdminUiProvider } from "./AdminUiContext";
 
 import { LandingRoute, SignupRoute, ForgotRoute } from "./PublicRoutes";
 import { LoginRoute } from "./LoginRoute";
+import { AuthCallbackRoute } from "./AuthCallbackRoute";
 import { ProfileRoute } from "./ProfileRoute";
 
 import {
@@ -58,6 +59,7 @@ export function AnimatedRoutes() {
           <Route path="/signup" element={<SignupRoute />} />
           <Route path="/forgot" element={<ForgotRoute />} />
           <Route path="/login" element={<LoginRoute />} />
+          <Route path="/auth/callback" element={<AuthCallbackRoute />} />
 
           <Route element={<AuthRouteGuard />}>
             <Route path="/profile" element={<ProfileRoute />} />

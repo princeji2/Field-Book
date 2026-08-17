@@ -18,7 +18,7 @@ import {
   BarChart, Bar, Cell,
 } from "recharts";
 import { toast, Toaster } from "sonner";
-import { signUpWithProfile, roleToScreen, signOutUser, getCurrentUserProfile, type SignupRole, type AuthedProfile } from "../lib/auth";
+import { signUpWithProfile, roleToScreen, signOutUser, getCurrentUserProfile, signInWithGoogle, type SignupRole, type AuthedProfile } from "../lib/auth";
 
 // ─── Typography shorthand ───────────────────────────────────────────────────
 export const F = { fontFamily: "'Fraunces', Georgia, serif" } as const;
@@ -694,6 +694,8 @@ export function SignupPage({ onNavigate, onAuthenticated }: { onNavigate: (s: Sc
   });
   const [phase, setPhase] = useState<"idle" | "loading" | "success">("idle");
   const [authErr, setAuthErr] = useState("");
+  const [googleErr, setGoogleErr] = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
   // True when signUpWithProfile returns "confirmation_required" — the success
   // panel is reused visually, but with different copy and no navigation,
   // since there's no session yet to send the user into a dashboard with.
@@ -749,6 +751,19 @@ export function SignupPage({ onNavigate, onAuthenticated }: { onNavigate: (s: Sc
 
     setConfirmedRole(result.role);
     setPhase("success");
+  }
+
+  async function handleGoogleSignIn() {
+    setGoogleErr("");
+    setGoogleLoading(true);
+    const { error } = await signInWithGoogle();
+    // Only reachable if the redirect itself failed to start — a successful
+    // call navigates the browser away before this line runs. Same pattern
+    // as AdminLoginScreen.handleGoogleSignIn.
+    if (error) {
+      setGoogleErr(error.message);
+      setGoogleLoading(false);
+    }
   }
 
   const clearErr = (field: keyof typeof errors) =>
@@ -1052,11 +1067,17 @@ export function SignupPage({ onNavigate, onAuthenticated }: { onNavigate: (s: Sc
                   {/* Google */}
                   <button
                     type="button"
-                    className="w-full flex items-center justify-center gap-2.5 px-5 py-2.5 bg-[#F6F1E7] border border-[#DCD4C2] rounded-[7px] text-sm text-[#1E1B16] hover:border-[#1E1B16]/35 transition-colors"
+                    onClick={handleGoogleSignIn}
+                    disabled={googleLoading}
+                    className="w-full flex items-center justify-center gap-2.5 px-5 py-2.5 bg-[#F6F1E7] border border-[#DCD4C2] rounded-[7px] text-sm text-[#1E1B16] hover:border-[#1E1B16]/35 disabled:opacity-60 transition-colors"
                   >
-                    <GoogleGlyph />
-                    Sign up with Google
+                    {googleLoading ? <RefreshCw size={13} className="animate-spin" /> : <GoogleGlyph />}
+                    {googleLoading ? "Redirecting…" : "Sign up with Google"}
                   </button>
+
+                  {googleErr && (
+                    <p className="text-[9px] text-[#B5432E] -mt-1" style={M}>{googleErr}</p>
+                  )}
 
                   {/* Login link */}
                   <p className="text-center text-xs text-[#6B6355] pt-0.5">

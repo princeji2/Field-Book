@@ -127,3 +127,32 @@ export async function signUpWithProfile(opts: {
 export async function signOutUser(): Promise<void> {
   await supabase.auth.signOut();
 }
+
+/**
+ * Starts the Google OAuth flow via Supabase Auth. This causes a full-page
+ * redirect to Google's account picker (window.location.assign under the
+ * hood, see supabase-js's signInWithOAuth) — there is no session yet by the
+ * time this promise resolves; it only resolves with an error if the redirect
+ * itself couldn't be initiated (e.g. Google provider not enabled in the
+ * Supabase dashboard, or a network failure).
+ *
+ * Google redirects the user back to /auth/callback with a PKCE auth code in
+ * the URL. supabaseClient.ts is configured with flowType: "pkce" and
+ * detectSessionInUrl: true, so the client library exchanges that code for a
+ * session automatically on page load — no exchangeCodeForSession() call is
+ * needed in this codebase. See AuthCallbackRoute.tsx for how the callback
+ * page waits for that exchange to finish (via useAuth()'s existing
+ * loading/role bootstrap) before routing the user into the app.
+ *
+ * Both the sign-in and sign-up "Continue with Google" buttons call this same
+ * function: Supabase Auth doesn't distinguish "sign up" from "sign in" for
+ * OAuth providers — a first-time Google sign-in creates the auth.users row
+ * (and, via the on_auth_user_created trigger, a profiles row defaulted to
+ * role 'student') exactly as a returning user's sign-in reuses it.
+ */
+export async function signInWithGoogle() {
+  return supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: `${window.location.origin}/auth/callback` },
+  });
+}
