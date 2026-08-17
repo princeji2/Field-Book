@@ -89,6 +89,35 @@ export type SignUpResult =
   | { status: "error"; message: string };
 
 /**
+ * Maps Supabase Auth error codes to copy safe to show end users, instead of
+ * forwarding raw API error strings verbatim (see the OTP-verify/resend UI in
+ * SignupPage, and the "email rate limit exceeded" issue this replaces for
+ * the signup email step specifically). Falls back to a generic message for
+ * any code not explicitly handled here, rather than ever surfacing internal
+ * wording like "otp_expired" or a raw network error to the UI.
+ *
+ * Error codes per https://supabase.com/docs/guides/auth/debugging/error-codes
+ */
+function otpErrorMessage(error: { code?: string; message?: string } | null | undefined): string {
+  switch (error?.code) {
+    case "otp_expired":
+      return "That code has expired. Request a new one below.";
+    case "over_email_send_rate_limit":
+    case "over_request_rate_limit":
+      return "Too many attempts. Please wait a moment before trying again.";
+    case "validation_failed":
+      return "Enter the 6-digit code exactly as sent.";
+    case "user_not_found":
+      return "We couldn't find a pending signup for this email. Try signing up again.";
+    default:
+      // Covers "Token has expired or is invalid" (wrong code) and any
+      // other error the SDK returns without a specific `code` we handle
+      // above — deliberately generic so nothing internal leaks through.
+      return "That code didn't work. Double-check it and try again, or request a new one.";
+  }
+}
+
+/**
  * Creates an auth user, passing full_name/role as signup metadata.
  *
  * There is intentionally NO client-side insert into `profiles` here: the
@@ -122,6 +151,39 @@ export async function signUpWithProfile(opts: {
   }
 
   return { status: "success", role };
+}
+
+export type VerifySignupOtpResult =
+  | { status: "success" }
+  | { status: "error"; message: string };
+
+/**
+ * Verifies the 6-digit code sent to a newly-signed-up user's email.
+ *
+ * type: "signup" tells Supabase Auth this OTP belongs to the pending signup
+ * confirmation flow (as opposed to "email" for a generic passwordless
+ * email-OTP sign-in, or "recovery" for password reset) — see
+ * EmailOtpType in @supabase/auth-js. On success this both confirms the
+ * user's email server-side and returns an active session, since Supabase
+ * treats a correct signup OTP the same as clicking the confirmation link:
+ * data.session comes back populated, so no separate sign-in call is needed
+ * after this resolves.
+ */
+export async function verifySignupOtp(email: string, token: string): Promise<VerifySignupOtpResult> {
+  const { error } = await supabase.auth.verifyOtp({ email, token, type: "signup" });
+  if (error) return { status: "error", message: otpErrorMessage(error) };
+  return { status: "success" };
+}
+
+export type ResendSignupOtpResult =
+  | { status: "success" }
+  | { status: "error"; message: string };
+
+/** Requests a fresh 6-digit signup code for an email with a pending, unconfirmed signup. */
+export async function resendSignupOtp(email: string): Promise<ResendSignupOtpResult> {
+  const { error } = await supabase.auth.resend({ type: "signup", email });
+  if (error) return { status: "error", message: otpErrorMessage(error) };
+  return { status: "success" };
 }
 
 export async function signOutUser(): Promise<void> {

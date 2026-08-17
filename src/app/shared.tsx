@@ -18,7 +18,7 @@ import {
   BarChart, Bar, Cell,
 } from "recharts";
 import { toast, Toaster } from "sonner";
-import { signUpWithProfile, roleToScreen, signOutUser, getCurrentUserProfile, signInWithGoogle, type SignupRole, type AuthedProfile } from "../lib/auth";
+import { signUpWithProfile, roleToScreen, signOutUser, getCurrentUserProfile, signInWithGoogle, verifySignupOtp, resendSignupOtp, type SignupRole, type AuthedProfile } from "../lib/auth";
 
 // ─── Typography shorthand ───────────────────────────────────────────────────
 export const F = { fontFamily: "'Fraunces', Georgia, serif" } as const;
@@ -692,18 +692,31 @@ export function SignupPage({ onNavigate, onAuthenticated }: { onNavigate: (s: Sc
   const [errors, setErrors]     = useState({
     name: "", email: "", password: "", confirm: "", terms: "", role: "",
   });
-  const [phase, setPhase] = useState<"idle" | "loading" | "success">("idle");
+  // "otp": signUp succeeded but email confirmation is required — waiting for
+  // the 6-digit code. "verifying": that code was submitted and is being
+  // checked. Both are new; "idle"/"loading"/"success" are unchanged from
+  // before OTP verification existed.
+  const [phase, setPhase] = useState<"idle" | "loading" | "otp" | "verifying" | "success">("idle");
   const [authErr, setAuthErr] = useState("");
   const [googleErr, setGoogleErr] = useState("");
   const [googleLoading, setGoogleLoading] = useState(false);
-  // True when signUpWithProfile returns "confirmation_required" — the success
-  // panel is reused visually, but with different copy and no navigation,
-  // since there's no session yet to send the user into a dashboard with.
-  const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
+  // The 6-digit code the user is entering, one character per box.
+  const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
+  const [otpErr, setOtpErr] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendNotice, setResendNotice] = useState("");
   // The role actually confirmed by signUpWithProfile's success result, used
   // for the post-signup navigation target (kept separate from `role` state
   // just for clarity of what actually succeeded vs. what's currently selected).
   const [confirmedRole, setConfirmedRole] = useState<SignupRole | null>(null);
+
+  // Resend cooldown countdown, one second at a time — same pattern as
+  // ForgotPage's existing cooldown timer below in this file.
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
 
   function validateEmail(v: string) {
     if (!v) return "College email is required.";
@@ -736,8 +749,10 @@ export function SignupPage({ onNavigate, onAuthenticated }: { onNavigate: (s: Sc
     }
 
     if (result.status === "confirmation_required") {
-      setAwaitingConfirmation(true);
-      setPhase("success");
+      setOtpDigits(["", "", "", "", "", ""]);
+      setOtpErr("");
+      setResendCooldown(60);
+      setPhase("otp");
       return;
     }
 
@@ -770,10 +785,84 @@ export function SignupPage({ onNavigate, onAuthenticated }: { onNavigate: (s: Sc
     setErrors(prev => ({ ...prev, [field]: "" }));
 
   useEffect(() => {
-    if (phase !== "success" || awaitingConfirmation) return;
+    if (phase !== "success") return;
     const t = setTimeout(() => onNavigate(roleToScreen(confirmedRole ?? "student")), 2000);
     return () => clearTimeout(t);
-  }, [phase, awaitingConfirmation, confirmedRole]);
+  }, [phase, confirmedRole]);
+
+  function handleOtpDigitChange(index: number, raw: string) {
+    const digit = raw.replace(/\D/g, "").slice(-1);
+    setOtpDigits(prev => {
+      const next = [...prev];
+      next[index] = digit;
+      return next;
+    });
+    if (otpErr) setOtpErr("");
+    if (digit && index < 5) {
+      document.getElementById(`su-otp-${index + 1}`)?.focus();
+    }
+  }
+
+  function handleOtpKeyDown(index: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace" && !otpDigits[index] && index > 0) {
+      document.getElementById(`su-otp-${index - 1}`)?.focus();
+    }
+  }
+
+  function handleOtpPaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (!pasted) return;
+    e.preventDefault();
+    setOtpDigits(prev => {
+      const next = [...prev];
+      for (let i = 0; i < 6; i++) next[i] = pasted[i] ?? next[i] ?? "";
+      return next;
+    });
+    if (otpErr) setOtpErr("");
+    document.getElementById(`su-otp-${Math.min(pasted.length, 5)}`)?.focus();
+  }
+
+  async function handleVerifyOtp(ev: React.FormEvent) {
+    ev.preventDefault();
+    const code = otpDigits.join("");
+    if (code.length !== 6) {
+      setOtpErr("Enter all 6 digits.");
+      return;
+    }
+
+    setOtpErr("");
+    setPhase("verifying");
+
+    const result = await verifySignupOtp(email, code);
+    if (result.status === "error") {
+      setOtpErr(result.message);
+      setPhase("otp");
+      return;
+    }
+
+    // Same as the immediate-session branch below: the on_auth_user_created
+    // trigger has already written the profiles row (it fires on the
+    // auth.users insert at signUp() time, independent of confirmation), so
+    // fetch it now that verifyOtp has produced a real session.
+    const freshProfile = await getCurrentUserProfile();
+    if (freshProfile) onAuthenticated?.(freshProfile);
+
+    setConfirmedRole(role);
+    setPhase("success");
+  }
+
+  async function handleResendOtp() {
+    if (resendCooldown > 0) return;
+    setResendNotice("");
+    setOtpErr("");
+    const result = await resendSignupOtp(email);
+    if (result.status === "error") {
+      setOtpErr(result.message);
+      return;
+    }
+    setResendCooldown(60);
+    setResendNotice("A new code is on its way.");
+  }
 
   const inputClass = (err: string) =>
     `w-full bg-[#F6F1E7] border rounded-[7px] px-3 py-2.5 text-sm text-[#1E1B16] placeholder:text-[#DCD4C2] outline-none transition-colors ${
@@ -810,12 +899,10 @@ export function SignupPage({ onNavigate, onAuthenticated }: { onNavigate: (s: Sc
                 >
                   <CertificateSeal size={80} rotate={-9} delay={0.15} />
                   <h2 className="text-[1.35rem] font-semibold text-[#1E1B16] mt-6 mb-1.5" style={F}>
-                    {awaitingConfirmation ? "Almost there." : "Account created."}
+                    Account created.
                   </h2>
                   <p className="text-sm text-[#6B6355] mb-6">
-                    {awaitingConfirmation
-                      ? "Check your email to confirm your account before signing in."
-                      : "Welcome to Fieldbook. Setting up your record…"}
+                    Welcome to Fieldbook. Setting up your record…
                   </p>
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#F6F1E7] border border-[#DCD4C2] rounded-full">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#2E6B4C] flex-shrink-0" />
@@ -826,8 +913,92 @@ export function SignupPage({ onNavigate, onAuthenticated }: { onNavigate: (s: Sc
                 </motion.div>
               )}
 
+              {/* ── Email verification (6-digit code) ── */}
+              {(phase === "otp" || phase === "verifying") && (
+                <motion.form
+                  key="otp"
+                  onSubmit={handleVerifyOtp}
+                  noValidate
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.25 }}
+                  className="px-8 py-9 flex flex-col items-center text-center"
+                >
+                  <div className="w-10 h-10 rounded-[6px] border border-[#DCD4C2] flex items-center justify-center mb-4">
+                    <Mail size={18} strokeWidth={1.5} className="text-[#6B6355]" />
+                  </div>
+                  <h2 className="text-[1.2rem] font-semibold text-[#1E1B16] mb-1.5" style={F}>
+                    Check your email.
+                  </h2>
+                  <p className="text-sm text-[#6B6355] mb-1">
+                    We sent a 6-digit code to
+                  </p>
+                  <p className="text-xs text-[#1E1B16] font-medium mb-6" style={M}>{email}</p>
+
+                  <div className="flex gap-2 mb-2" onPaste={handleOtpPaste}>
+                    {otpDigits.map((digit, i) => (
+                      <input
+                        key={i}
+                        id={`su-otp-${i}`}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        autoComplete={i === 0 ? "one-time-code" : "off"}
+                        value={digit}
+                        disabled={phase === "verifying"}
+                        onChange={e => handleOtpDigitChange(i, e.target.value)}
+                        onKeyDown={e => handleOtpKeyDown(i, e)}
+                        aria-label={`Digit ${i + 1} of 6`}
+                        className={`w-10 h-12 text-center text-lg font-semibold bg-[#F6F1E7] border rounded-[7px] text-[#1E1B16] outline-none transition-colors disabled:opacity-60 ${
+                          otpErr ? "border-[#B5432E]" : "border-[#DCD4C2] focus:border-[#1E1B16]/40"
+                        }`}
+                        style={M}
+                      />
+                    ))}
+                  </div>
+
+                  {otpErr && (
+                    <p className="text-[10px] text-[#B5432E] mb-4" style={M}>{otpErr}</p>
+                  )}
+                  {!otpErr && resendNotice && (
+                    <p className="text-[10px] text-[#2E6B4C] mb-4" style={M}>{resendNotice}</p>
+                  )}
+                  {!otpErr && !resendNotice && <div className="mb-4" />}
+
+                  <button
+                    type="submit"
+                    disabled={phase === "verifying" || otpDigits.join("").length !== 6}
+                    className="w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {phase === "verifying" ? (
+                      <RefreshCw size={13} className="animate-spin" />
+                    ) : (
+                      <><span>Verify</span><ArrowRight size={13} /></>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={resendCooldown > 0}
+                    className={`mt-4 text-xs font-medium transition-colors ${
+                      resendCooldown > 0
+                        ? "text-[#DCD4C2] cursor-not-allowed"
+                        : "text-[#1E1B16] hover:text-[#E2A23B]"
+                    }`}
+                  >
+                    {resendCooldown > 0 ? (
+                      <span style={M} className="text-[9px]">Resend code in {resendCooldown}s</span>
+                    ) : (
+                      "Resend code →"
+                    )}
+                  </button>
+                </motion.form>
+              )}
+
               {/* ── Form ── */}
-              {phase !== "success" && (
+              {phase !== "success" && phase !== "otp" && phase !== "verifying" && (
                 <motion.form
                   key="form"
                   onSubmit={handleSubmit}
