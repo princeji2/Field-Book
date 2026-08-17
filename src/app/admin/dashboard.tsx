@@ -99,7 +99,7 @@ function SeismographTrace({ width, height, rowCount, rowDelay }: {
   );
 }
 
-export function AdminDashboard({ onNavigate, livePendingApprovals, isGuest, profile }: { onNavigate: (s: Screen) => void; livePendingApprovals?: number; isGuest?: boolean; profile?: AuthedProfile | null }) {
+export function AdminDashboard({ onNavigate, livePendingApprovals, livePendingRoleRequests, isGuest, profile }: { onNavigate: (s: Screen) => void; livePendingApprovals?: number; livePendingRoleRequests?: number; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const pendingCount = livePendingApprovals ?? ADMIN_PENDING_APPROVALS.length;
   const activityRef  = useRef<HTMLDivElement>(null);
   const [activityWidth, setActivityWidth] = useState(0);
@@ -121,6 +121,7 @@ export function AdminDashboard({ onNavigate, livePendingApprovals, isGuest, prof
       adminName={profile?.fullName ?? "Dr. Helena Marsh"}
       adminRole="Platform Administrator"
       pendingApprovals={pendingCount}
+      pendingRoleRequests={livePendingRoleRequests ?? 0}
       notifCount={3}
       isGuest={isGuest}
       onLogOut={() => { void signOutUser(); onNavigate("admin-login"); }}
@@ -128,6 +129,7 @@ export function AdminDashboard({ onNavigate, livePendingApprovals, isGuest, prof
         if (id === "profile")         { onNavigate("profile");         return; }
         if (id === "admin-approvals") { onNavigate("admin-approvals"); return; }
         if (id === "admin-users")     { onNavigate("admin-users");     return; }
+        if (id === "admin-role-requests") { onNavigate("admin-role-requests"); return; }
         if (id === "admin-templates") { onNavigate("admin-templates"); return; }
         if (id === "admin-analytics") { onNavigate("admin-analytics"); return; }
         if (id === "admin-settings")  { onNavigate("admin-settings");  return; }

@@ -22,7 +22,7 @@ import {
 } from "./OrganizerRoutes";
 
 import {
-  AdminDashboardRoute, AdminApprovalsRoute, AdminUsersRoute,
+  AdminDashboardRoute, AdminApprovalsRoute, AdminUsersRoute, AdminRoleRequestsRoute,
   AdminTemplatesRoute, AdminAnalyticsRoute, AdminSettingsRoute,
   AdminNotificationsRoute,
 } from "./AdminRoutes";
@@ -93,6 +93,7 @@ export function AnimatedRoutes() {
             <Route path="dashboard" element={<AdminDashboardRoute />} />
             <Route path="approvals" element={<AdminApprovalsRoute />} />
             <Route path="users" element={<AdminUsersRoute />} />
+            <Route path="role-requests" element={<AdminRoleRequestsRoute />} />
             <Route path="templates" element={<AdminTemplatesRoute />} />
             <Route path="analytics" element={<AdminAnalyticsRoute />} />
             <Route path="settings" element={<AdminSettingsRoute />} />

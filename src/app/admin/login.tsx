@@ -688,6 +688,7 @@ export function AdminProfileScreen({ onNavigate, isGuest, profile }: { onNavigat
         if (id === "admin-dashboard")  { onNavigate("admin-dashboard");  return; }
         if (id === "admin-approvals")  { onNavigate("admin-approvals");  return; }
         if (id === "admin-users")      { onNavigate("admin-users");      return; }
+        if (id === "admin-role-requests") { onNavigate("admin-role-requests"); return; }
         if (id === "admin-templates")  { onNavigate("admin-templates");  return; }
         if (id === "admin-analytics")  { onNavigate("admin-analytics");  return; }
         if (id === "admin-settings")   { onNavigate("admin-settings");   return; }

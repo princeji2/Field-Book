@@ -3,6 +3,8 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 interface AdminUiContextValue {
   livePendingApprovals: number;
   setLivePendingApprovals: (n: number) => void;
+  livePendingRoleRequests: number;
+  setLivePendingRoleRequests: (n: number) => void;
 }
 
 const AdminUiContext = createContext<AdminUiContextValue | null>(null);
@@ -19,8 +21,15 @@ const AdminUiContext = createContext<AdminUiContextValue | null>(null);
  */
 export function AdminUiProvider({ children }: { children: ReactNode }) {
   const [livePendingApprovals, setLivePendingApprovals] = useState(4);
+  // Starts at 0 (unlike livePendingApprovals' mock-data default of 4) since
+  // role_change_requests is real data from the start — RoleRequestsRoute's
+  // fetch on mount corrects this to the real pending count immediately.
+  const [livePendingRoleRequests, setLivePendingRoleRequests] = useState(0);
   return (
-    <AdminUiContext.Provider value={{ livePendingApprovals, setLivePendingApprovals }}>
+    <AdminUiContext.Provider value={{
+      livePendingApprovals, setLivePendingApprovals,
+      livePendingRoleRequests, setLivePendingRoleRequests,
+    }}>
       {children}
     </AdminUiContext.Provider>
   );

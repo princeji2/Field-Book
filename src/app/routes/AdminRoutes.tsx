@@ -1,5 +1,5 @@
 import {
-  AdminDashboard, ApprovalsScreen, UsersScreen,
+  AdminDashboard, ApprovalsScreen, UsersScreen, RoleRequestsScreen,
   CertificateTemplatesScreen, AdminAnalyticsScreen,
   AdminSettingsScreen, AdminNotifsScreen,
 } from "../admin";
@@ -11,12 +11,13 @@ import { Fade } from "./Fade";
 export function AdminDashboardRoute() {
   const onNavigate = useScreenNav();
   const { isGuest, profile } = useAuth();
-  const { livePendingApprovals } = useAdminUi();
+  const { livePendingApprovals, livePendingRoleRequests } = useAdminUi();
   return (
     <Fade>
       <AdminDashboard
         onNavigate={onNavigate}
         livePendingApprovals={livePendingApprovals}
+        livePendingRoleRequests={livePendingRoleRequests}
         isGuest={isGuest}
         profile={profile}
       />
@@ -46,6 +47,22 @@ export function AdminUsersRoute() {
   return (
     <Fade>
       <UsersScreen onNavigate={onNavigate} isGuest={isGuest} profile={profile} />
+    </Fade>
+  );
+}
+
+export function AdminRoleRequestsRoute() {
+  const onNavigate = useScreenNav();
+  const { isGuest, profile } = useAuth();
+  const { setLivePendingRoleRequests } = useAdminUi();
+  return (
+    <Fade>
+      <RoleRequestsScreen
+        onNavigate={onNavigate}
+        onPendingChange={setLivePendingRoleRequests}
+        isGuest={isGuest}
+        profile={profile}
+      />
     </Fade>
   );
 }

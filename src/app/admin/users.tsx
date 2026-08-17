@@ -503,6 +503,7 @@ export function UsersScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: 
         if (id === "profile")          { onNavigate("profile");          return; }
         if (id === "admin-dashboard")  { onNavigate("admin-dashboard");  return; }
         if (id === "admin-approvals")  { onNavigate("admin-approvals");  return; }
+        if (id === "admin-role-requests") { onNavigate("admin-role-requests"); return; }
         if (id === "admin-templates")  { onNavigate("admin-templates");  return; }
         if (id === "admin-analytics")  { onNavigate("admin-analytics");  return; }
         if (id === "admin-settings")   { onNavigate("admin-settings");   return; }

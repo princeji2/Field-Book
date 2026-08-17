@@ -41,6 +41,7 @@ export function screenToPath(screen: Screen, id?: string): string {
     case "admin-dashboard": return "/admin/dashboard";
     case "admin-approvals": return "/admin/approvals";
     case "admin-users": return "/admin/users";
+    case "admin-role-requests": return "/admin/role-requests";
     case "admin-templates": return "/admin/templates";
     case "admin-analytics": return "/admin/analytics";
     case "admin-settings": return "/admin/settings";

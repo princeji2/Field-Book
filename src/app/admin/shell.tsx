@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   BookMarked, Menu, Home, CheckCircle2, Users, FileText,
   BarChart3, Settings, Bell, Eye, ChevronLeft, Plus,
-  ArrowLeft, User, LogOut, X,
+  ArrowLeft, User, LogOut, X, UserCog,
 } from "lucide-react";
 import { toast } from "sonner";
 import { F, M, type Screen, useSidebarState, SidebarFrame } from "../shared";
@@ -14,6 +14,7 @@ const ADMIN_NAV_ITEMS = [
   { id:"admin-dashboard",  label:"Dashboard",             icon:Home         },
   { id:"admin-approvals",  label:"Approvals",             icon:CheckCircle2 },
   { id:"admin-users",      label:"Users",                 icon:Users        },
+  { id:"admin-role-requests", label:"Role Requests",      icon:UserCog      },
   { id:"admin-templates",  label:"Certificate Templates", icon:FileText     },
   { id:"admin-analytics",  label:"Analytics",             icon:BarChart3    },
   { id:"admin-settings",   label:"Settings",              icon:Settings     },
@@ -46,6 +47,8 @@ export function AdminAppShell({
   adminRole,
   pendingApprovals,
   pendingApprovalsKey,
+  pendingRoleRequests,
+  pendingRoleRequestsKey,
   notifCount,
   notifCountKey,
   onNav,
@@ -60,6 +63,8 @@ export function AdminAppShell({
   adminRole: string;
   pendingApprovals: number;
   pendingApprovalsKey?: number;
+  pendingRoleRequests?: number;
+  pendingRoleRequestsKey?: number;
   notifCount: number;
   notifCountKey?: number;
   onNav?: (id: string) => void;
@@ -109,9 +114,15 @@ export function AdminAppShell({
         <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
           {ADMIN_NAV_ITEMS.map(({ id, label, icon: Icon }) => {
             const active = activeNav === id;
-            const hasBadge = (id === "admin-approvals" && pendingApprovals > 0) || (id === "admin-notifs" && notifCount > 0);
-            const badgeNum  = id === "admin-approvals" ? pendingApprovals : notifCount;
-            const badgeKey  = id === "admin-approvals" ? (pendingApprovalsKey ?? pendingApprovals) : (notifCountKey ?? notifCount);
+            const hasBadge = (id === "admin-approvals" && pendingApprovals > 0)
+              || (id === "admin-role-requests" && !!pendingRoleRequests && pendingRoleRequests > 0)
+              || (id === "admin-notifs" && notifCount > 0);
+            const badgeNum  = id === "admin-approvals" ? pendingApprovals
+              : id === "admin-role-requests" ? (pendingRoleRequests ?? 0)
+              : notifCount;
+            const badgeKey  = id === "admin-approvals" ? (pendingApprovalsKey ?? pendingApprovals)
+              : id === "admin-role-requests" ? (pendingRoleRequestsKey ?? pendingRoleRequests ?? 0)
+              : (notifCountKey ?? notifCount);
             return (
               <div key={id} className="relative group">
                 <button type="button" onClick={() => { onNav?.(id); if (isMobile) setMobileOpen(false); }}

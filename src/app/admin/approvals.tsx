@@ -213,6 +213,7 @@ export function ApprovalsScreen({ onNavigate, onPendingChange, isGuest, profile 
         if (id === "profile")         { onNavigate("profile");         return; }
         if (id === "admin-dashboard") { onNavigate("admin-dashboard"); return; }
         if (id === "admin-users")     { onNavigate("admin-users");     return; }
+        if (id === "admin-role-requests") { onNavigate("admin-role-requests"); return; }
         if (id === "admin-templates") { onNavigate("admin-templates"); return; }
         if (id === "admin-analytics") { onNavigate("admin-analytics"); return; }
         if (id === "admin-settings")  { onNavigate("admin-settings");  return; }

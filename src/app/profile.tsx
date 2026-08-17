@@ -1,13 +1,37 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { AnimatePresence } from "motion/react";
 import { motion } from "motion/react";
-import { ArrowLeft, Check, Upload, Trash2, RefreshCw, Eye, EyeOff, LogOut, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Check, Upload, Trash2, RefreshCw, Eye, EyeOff, LogOut, AlertTriangle, UserCog, Clock, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { F, M, dotGrid, type Screen } from "./shared";
 import { updateAvatarUrl } from "../lib/auth";
 import { uploadToBucket, buildObjectPath } from "../lib/storage";
+import {
+  getMyRoleChangeRequests, createRoleChangeRequest,
+  type RoleChangeRequest,
+} from "../lib/roleRequests";
+import type { AppRole } from "../lib/auth";
 
 type ProfileRole = "Admin" | "Organizer" | "Student";
+
+// profile.tsx's own Title Case <-> lowercase-DB role mapping — mirrors
+// dbRoleToUserRole/userRoleToDbRole in lib/users.ts, but that pair converts
+// to admin/shell.tsx's UserRole type specifically; ProfileRole is a
+// separate (if identically-valued) type local to this file, so it gets its
+// own small mapper rather than importing users.ts's admin-UI-flavored one.
+function profileRoleToAppRole(role: ProfileRole): AppRole {
+  if (role === "Admin") return "admin";
+  if (role === "Organizer") return "organizer";
+  return "student";
+}
+
+function appRoleToProfileRole(role: AppRole): ProfileRole {
+  if (role === "admin") return "Admin";
+  if (role === "organizer") return "Organizer";
+  return "Student";
+}
+
+const REQUESTABLE_ROLES: ProfileRole[] = ["Student", "Organizer", "Admin"];
 
 const ROLE_STYLES: Record<ProfileRole, {
   avatarBg: string; avatarBorder: string; avatarText: string;
@@ -71,6 +95,32 @@ function SettingsToggle({
         checked ? "left-[18px] bg-[#F6F1E7]" : "left-[3px] bg-[#9C8E7E]"
       }`} />
     </button>
+  );
+}
+
+// ─── Role change request status pill ────────────────────────────────────────
+function RequestStatusPill({ status }: { status: RoleChangeRequest["status"] }) {
+  if (status === "pending") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-[3px] rounded-full text-[8px] font-semibold"
+        style={{ ...M, background:"rgba(226,162,59,0.12)", border:"1px solid rgba(226,162,59,0.3)", color:"#8A5C00" }}>
+        <Clock size={8} strokeWidth={2} /> Pending
+      </span>
+    );
+  }
+  if (status === "approved") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-[3px] rounded-full text-[8px] font-semibold"
+        style={{ ...M, background:"rgba(46,107,76,0.10)", border:"1px solid rgba(46,107,76,0.3)", color:"#2E6B4C" }}>
+        <Check size={8} strokeWidth={2.5} /> Approved
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-[3px] rounded-full text-[8px] font-semibold"
+      style={{ ...M, background:"rgba(181,67,46,0.10)", border:"1px solid rgba(181,67,46,0.28)", color:"#B5432E" }}>
+      <XCircle size={8} strokeWidth={1.75} /> Rejected
+    </span>
   );
 }
 
@@ -153,6 +203,63 @@ export function ProfileScreen({
   const [pwSaving,        setPwSaving]        = useState(false);
 
   const [showDeactivate, setShowDeactivate] = useState(false);
+
+  // ── Role change requests ──
+  const [roleRequests, setRoleRequests] = useState<RoleChangeRequest[]>([]);
+  const [roleRequestsLoading, setRoleRequestsLoading] = useState(!isGuest);
+  const [roleRequestsError, setRoleRequestsError] = useState<string | null>(null);
+  const [requestedRole, setRequestedRole] = useState<ProfileRole | null>(null);
+  const [requestReason, setRequestReason] = useState("");
+  const [submittingRequest, setSubmittingRequest] = useState(false);
+  const [requestSubmitError, setRequestSubmitError] = useState<string | null>(null);
+
+  const fetchRoleRequests = useCallback(async () => {
+    setRoleRequestsLoading(true);
+    setRoleRequestsError(null);
+    const result = await getMyRoleChangeRequests();
+    if (result.status === "error") {
+      setRoleRequestsError(result.message);
+      setRoleRequestsLoading(false);
+      return;
+    }
+    setRoleRequests(result.requests);
+    setRoleRequestsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    // Guest sessions have no real Supabase row to request a change against
+    // — same isGuest short-circuit every other real-data fetch in this app
+    // uses (see UsersScreen/RoleRequestsScreen).
+    if (isGuest || !userId) { setRoleRequestsLoading(false); return; }
+    void fetchRoleRequests();
+  }, [isGuest, userId, fetchRoleRequests]);
+
+  const pendingRoleRequest = roleRequests.find(r => r.status === "pending") ?? null;
+
+  async function handleSubmitRoleRequest() {
+    if (!userId || !requestedRole) return;
+    setRequestSubmitError(null);
+    setSubmittingRequest(true);
+
+    const result = await createRoleChangeRequest({
+      userId,
+      currentRole: profileRoleToAppRole(role),
+      requestedRole: profileRoleToAppRole(requestedRole),
+      reason: requestReason,
+    });
+
+    setSubmittingRequest(false);
+
+    if (result.status === "error") {
+      setRequestSubmitError(result.message);
+      return;
+    }
+
+    setRoleRequests(prev => [result.request, ...prev]);
+    setRequestedRole(null);
+    setRequestReason("");
+    toast.success("Role change request submitted");
+  }
 
   const [avatarUrl, setAvatarUrl] = useState<string | null>(initialAvatarUrl);
   const [isDirty, setIsDirty]     = useState(false);
@@ -519,6 +626,135 @@ export function ProfileScreen({
                 </div>
               ))}
             </div>
+          </SectionCard>
+
+          {/* ── Role Change Request ── */}
+          <SectionCard title="Role Change Request" subtitle="Request a change to your account role — an admin must approve it before it takes effect">
+            {roleRequestsLoading && (
+              <div className="flex items-center gap-2 py-2">
+                <RefreshCw size={13} strokeWidth={1.5} className="text-[#9C8E7E] animate-spin" />
+                <span className="text-[11px] text-[#9C8E7E]" style={PS}>Loading your requests…</span>
+              </div>
+            )}
+
+            {!roleRequestsLoading && roleRequestsError && (
+              <div className="space-y-2">
+                <p className="text-[11px] text-[#B5432E]" style={PS}>Couldn't load your requests: {roleRequestsError}</p>
+                <button type="button" onClick={() => void fetchRoleRequests()}
+                  className="flex items-center gap-1.5 px-3 py-[6px] rounded-[6px] text-[11px] font-semibold border border-[#DCD4C2] text-[#1E1B16] hover:bg-[#F6F1E7] transition-colors"
+                  style={PS}>
+                  <RefreshCw size={11} strokeWidth={1.75} /> Retry
+                </button>
+              </div>
+            )}
+
+            {!roleRequestsLoading && !roleRequestsError && (
+              <>
+                {pendingRoleRequest ? (
+                  /* A pending request already exists — block new submissions until it's resolved. */
+                  <div className="bg-[#F6F1E7] border border-[#DCD4C2] rounded-[7px] p-4 flex items-start gap-3">
+                    <UserCog size={14} strokeWidth={1.5} className="text-[#6B6355] flex-shrink-0 mt-[1px]" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[12px] font-medium text-[#1E1B16]" style={PS}>
+                          Request to become {pendingRoleRequest.requestedRole === "admin" ? "an" : "a"}{" "}
+                          {appRoleToProfileRole(pendingRoleRequest.requestedRole)}
+                        </span>
+                        <RequestStatusPill status={pendingRoleRequest.status} />
+                      </div>
+                      <p className="text-[10px]" style={{ ...M, color: "#9C8E7E" }}>
+                        Submitted {new Date(pendingRoleRequest.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        {" · "}awaiting admin review
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  /* No pending request — offer the picker + optional reason. */
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[9px] tracking-widest uppercase text-[#6B6355] mb-2" style={M}>
+                        Request to become
+                      </label>
+                      <div className="flex gap-2">
+                        {REQUESTABLE_ROLES.filter(r => r !== role).map(r => {
+                          const active = requestedRole === r;
+                          return (
+                            <button key={r} type="button"
+                              onClick={() => { setRequestedRole(r); setRequestSubmitError(null); }}
+                              disabled={isGuest}
+                              className="flex-1 px-3 py-2.5 text-[12px] font-medium rounded-[7px] border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                              style={{
+                                ...PS,
+                                background: active ? "#E2A23B" : "#F6F1E7",
+                                color: active ? "#1E1B16" : "#1E1B16",
+                                borderColor: active ? "rgba(30,27,22,0.15)" : "#DCD4C2",
+                              }}>
+                              {r}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {requestedRole && (
+                      <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.15 }}>
+                        <ProfileRow label="Reason" hint="Optional — helps the reviewing admin decide">
+                          <textarea
+                            value={requestReason}
+                            onChange={e => setRequestReason(e.target.value)}
+                            rows={2}
+                            placeholder="Why are you requesting this change?"
+                            className={`${inputCls} resize-none`}
+                            style={PS}
+                          />
+                        </ProfileRow>
+                      </motion.div>
+                    )}
+
+                    {requestSubmitError && (
+                      <p className="text-[10px] text-[#B5432E]" style={M}>{requestSubmitError}</p>
+                    )}
+
+                    <button type="button"
+                      onClick={handleSubmitRoleRequest}
+                      disabled={!requestedRole || submittingRequest || isGuest}
+                      title={isGuest ? "Disabled in guest mode" : undefined}
+                      className="flex items-center gap-2 px-4 py-[8px] rounded-[6px] text-[12px] font-semibold transition-opacity hover:opacity-85 disabled:opacity-60 disabled:cursor-not-allowed"
+                      style={{ ...PS, background: "#E2A23B", color: "#1E1B16" }}>
+                      {submittingRequest
+                        ? <RefreshCw size={12} className="animate-spin" />
+                        : <UserCog size={12} strokeWidth={2} />}
+                      Submit Request
+                    </button>
+                  </div>
+                )}
+
+                {/* History of past (resolved) requests */}
+                {roleRequests.filter(r => r.status !== "pending").length > 0 && (
+                  <div className="pt-2 border-t border-[#EDE7DA] space-y-2.5">
+                    <div className="text-[9px] tracking-widest uppercase text-[#6B6355] pt-3" style={M}>Request History</div>
+                    {roleRequests.filter(r => r.status !== "pending").map(r => (
+                      <div key={r.id} className="flex items-start justify-between gap-3 py-1.5">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-[11px] text-[#1E1B16]" style={PS}>
+                              {appRoleToProfileRole(r.currentRole)} → {appRoleToProfileRole(r.requestedRole)}
+                            </span>
+                            <RequestStatusPill status={r.status} />
+                          </div>
+                          {r.adminNote && (
+                            <p className="text-[10px] text-[#9C8E7E] leading-relaxed" style={PS}>{r.adminNote}</p>
+                          )}
+                        </div>
+                        <span className="text-[9px] text-[#9C8E7E] flex-shrink-0" style={M}>
+                          {new Date(r.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </SectionCard>
 
           {/* ── Danger Zone ── */}

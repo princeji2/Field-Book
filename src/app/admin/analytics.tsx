@@ -100,6 +100,7 @@ export function AdminAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavig
     if (id === "admin-dashboard")  { onNavigate("admin-dashboard");  return; }
     if (id === "admin-approvals")  { onNavigate("admin-approvals");  return; }
     if (id === "admin-users")      { onNavigate("admin-users");      return; }
+    if (id === "admin-role-requests") { onNavigate("admin-role-requests"); return; }
     if (id === "admin-templates")  { onNavigate("admin-templates");  return; }
     if (id === "admin-settings")   { onNavigate("admin-settings");   return; }
     if (id === "admin-notifs")     { onNavigate("admin-notifs");     return; }
