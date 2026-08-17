@@ -182,17 +182,17 @@ export function AdminAppShell({
         </div>
       </>}>
       {/* ── Top bar ── */}
-      <header className="h-14 flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] flex items-center gap-4 px-4 sm:px-8">
+      <header className="min-h-14 flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:h-14 sm:py-0 sm:px-8">
           {isMobile && (
             <button
               type="button"
               onClick={() => setMobileOpen(v => !v)}
               aria-label="Open navigation menu"
-              className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-[6px] text-[#1E1B16] hover:bg-[#EDE7DA] transition-colors">
+              className="order-1 flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-[6px] text-[#1E1B16] hover:bg-[#EDE7DA] transition-colors">
               <Menu size={14} strokeWidth={1.75} />
             </button>
           )}
-          <div className="flex-1 min-w-0">
+          <div className="order-2 flex-1 min-w-0">
             {topBarLeft ?? (
               <div>
                 <p className="text-[13px] font-semibold text-[#1E1B16] leading-tight" style={F}>
@@ -204,10 +204,14 @@ export function AdminAppShell({
               </div>
             )}
           </div>
-          {topBarActions && <div className="flex items-center gap-2 flex-shrink-0">{topBarActions}</div>}
+          {topBarActions && (
+            <div className="order-3 w-full sm:w-auto flex items-center gap-2 flex-shrink-0">
+              {topBarActions}
+            </div>
+          )}
           {/* Guest badge */}
           {isGuest && (
-            <div className="flex items-center gap-1.5 px-2.5 py-[5px] rounded-full border border-[#DCD4C2] flex-shrink-0"
+            <div className="order-4 flex items-center gap-1.5 px-2.5 py-[5px] rounded-full border border-[#DCD4C2] flex-shrink-0"
               style={{ background:"rgba(107,99,85,0.08)" }}>
               <Eye size={10} strokeWidth={1.75} style={{ color:"#6B6355" }} />
               <span className="text-[9px] font-medium tracking-wide" style={{ ...M, color:"#6B6355" }}>Viewing as Guest</span>
@@ -216,14 +220,14 @@ export function AdminAppShell({
           {/* Bell */}
           <button type="button"
             onClick={() => onNav?.("admin-notifs")}
-            className="relative p-1 flex-shrink-0" aria-label="Notifications">
+            className="order-5 relative p-1 flex-shrink-0" aria-label="Notifications">
             <Bell size={15} strokeWidth={1.5} color="#6B6355" />
             {notifCount > 0 && (
               <span className="absolute top-0 right-0 w-[7px] h-[7px] rounded-full border border-[#F6F1E7]" style={{ background:"#E2A23B" }} />
             )}
           </button>
           {/* Avatar — opens profile menu */}
-          <div className="relative flex-shrink-0">
+          <div className="order-6 relative flex-shrink-0">
             <button
               ref={avatarRef}
               type="button"

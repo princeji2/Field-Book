@@ -27,6 +27,14 @@ import { ProfileScreen } from "./profile";
 import { signOutUser, type AuthedProfile } from "../lib/auth";
 import { uploadToBucket, buildObjectPath } from "../lib/storage";
 import { supabase } from "../lib/supabaseClient";
+import {
+  type EventRow,
+  listOrganizerEvents,
+  generateEventCode,
+  formatEventDate,
+  capitalizeStatus,
+} from "../lib/events";
+import { submitEventApproval } from "../lib/approvals";
 
 // ─── Organizer shell ──────────────────────────────────────────────────────────
 
@@ -152,26 +160,30 @@ function OrgAppShell({
         </div>
       </>}>
       {/* ── Top bar ── */}
-      <header className="h-14 flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] flex items-center gap-4 px-4 sm:px-8">
+      <header className="min-h-14 flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:h-14 sm:py-0 sm:px-8">
           {isMobile && (
             <button
               type="button"
               onClick={() => setMobileOpen(v => !v)}
               aria-label="Open navigation menu"
-              className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-[6px] text-[#1E1B16] hover:bg-[#EDE7DA] transition-colors">
+              className="order-1 flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-[6px] text-[#1E1B16] hover:bg-[#EDE7DA] transition-colors">
               <Menu size={14} strokeWidth={1.75} />
             </button>
           )}
-          <div className="flex-1 min-w-0">{topBarLeft}</div>
-          {topBarActions && <div className="flex items-center gap-2 flex-shrink-0">{topBarActions}</div>}
+          <div className="order-2 flex-1 min-w-0">{topBarLeft}</div>
+          {topBarActions && (
+            <div className="order-3 w-full sm:w-auto flex items-center gap-2 flex-shrink-0">
+              {topBarActions}
+            </div>
+          )}
           {isGuest && (
-            <div className="flex items-center gap-1.5 px-2.5 py-[5px] rounded-full border border-[#DCD4C2] flex-shrink-0"
+            <div className="order-4 flex items-center gap-1.5 px-2.5 py-[5px] rounded-full border border-[#DCD4C2] flex-shrink-0"
               style={{ background:"rgba(107,99,85,0.08)" }}>
               <EyeIcon size={10} strokeWidth={1.75} style={{ color:"#6B6355" }} />
               <span className="text-[9px] font-medium tracking-wide" style={{ ...M, color:"#6B6355" }}>Viewing as Guest</span>
             </div>
           )}
-          <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="order-5 flex items-center gap-3 flex-shrink-0">
             <button type="button" className="relative p-1" aria-label="Notifications">
               <Bell size={15} strokeWidth={1.5} color="#6B6355" />
               {notifCount > 0 && (
@@ -789,9 +801,33 @@ function OrgMediaDropzone() {
 
 export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGuest, profile }: { onNavigate: (s: Screen, id?: string) => void; initialView?: "list" | "create"; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const [view, setView]           = useState<"list" | "create" | "edit">(initialView);
-  const [editEvent, setEditEvent] = useState<OrgEvent | null>(null);
+  const [editEvent, setEditEvent] = useState<EventRow | null>(null);
   const [statusTab, setStatusTab] = useState<"all" | OrgEventStatus>("all");
   const [form, setForm]           = useState<EventFormData>(DEFAULT_FORM);
+  const [saving, setSaving]       = useState(false);
+
+  // Real events owned by the signed-in organizer (events_select_own_organizer
+  // RLS — draft included). Replaces the hardcoded ORG_EVENTS array for this
+  // screen only; ORG_EVENTS still backs the QR/Attendees/Analytics screens,
+  // which are out of scope for this pass.
+  const [orgEvents, setOrgEvents] = useState<EventRow[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+
+  async function refreshEvents() {
+    if (!profile?.id) { setEventsLoading(false); return; }
+    setEventsLoading(true);
+    const result = await listOrganizerEvents(profile.id);
+    setEventsLoading(false);
+    if (result.status === "error") {
+      setEventsError(result.message);
+      return;
+    }
+    setEventsError(null);
+    setOrgEvents(result.events);
+  }
+
+  useEffect(() => { void refreshEvents(); }, [profile?.id]);
 
   function upd<K extends keyof EventFormData>(k: K, v: EventFormData[K]) {
     setForm(prev => ({ ...prev, [k]: v }));
@@ -803,8 +839,20 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
     setView("create");
   }
 
-  function startEdit(ev: OrgEvent) {
-    setForm({ ...DEFAULT_FORM, title: ev.title, venue: ev.venue, capacity: String(ev.capacity) });
+  function startEdit(ev: EventRow) {
+    setForm({
+      ...DEFAULT_FORM,
+      title: ev.title,
+      category: ev.category ?? DEFAULT_FORM.category,
+      department: ev.department ?? "",
+      description: ev.description ?? "",
+      date: ev.event_date ?? "",
+      startTime: ev.start_time?.slice(0, 5) ?? "",
+      endTime: ev.end_time?.slice(0, 5) ?? "",
+      locationType: ev.location_type,
+      venue: ev.venue ?? "",
+      capacity: String(ev.capacity),
+    });
     setEditEvent(ev);
     setView("edit");
   }
@@ -814,14 +862,134 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
     setEditEvent(null);
   }
 
-  const filteredEvents = statusTab === "all" ? ORG_EVENTS : ORG_EVENTS.filter(e => e.status === statusTab);
+  /** Builds the events-table insert/update payload from the current form state. */
+  function buildEventPayload() {
+    return {
+      title: form.title.trim(),
+      category: form.category,
+      department: form.department.trim() || null,
+      description: form.description.trim() || null,
+      location_type: form.locationType,
+      venue: form.locationType === "online" ? null : (form.venue.trim() || null),
+      event_date: form.date,
+      start_time: form.startTime || null,
+      end_time: form.endTime || null,
+      capacity: parseInt(form.capacity, 10) || 0,
+    };
+  }
+
+  function validateForm(): string | null {
+    if (!form.title.trim()) return "Give the event a title before saving.";
+    if (!form.date) return "Pick a date before saving.";
+    return null;
+  }
+
+  /**
+   * Saves the current form as a draft. events_insert_organizer requires
+   * status = 'draft' on insert (organizers cannot self-publish), and
+   * events_update_own_organizer lets the same organizer edit their own
+   * row afterward — so a second "Save as Draft" on an event created this
+   * way is an update, not a duplicate insert.
+   */
+  async function handleSaveDraft() {
+    if (isGuest || !profile?.id) return;
+    const validationError = validateForm();
+    if (validationError) { toast.error(validationError); return; }
+
+    setSaving(true);
+    const payload = buildEventPayload();
+
+    if (editEvent) {
+      const { data, error } = await supabase
+        .from("events")
+        .update(payload)
+        .eq("id", editEvent.id)
+        .select()
+        .single();
+      setSaving(false);
+      if (error) { toast.error(`Couldn't save draft: ${error.message}`); return; }
+      setEditEvent(data as EventRow);
+      toast.success("Saved as draft");
+      await refreshEvents();
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("events")
+      .insert({
+        ...payload,
+        code: generateEventCode(form.title || "event"),
+        organizer_id: profile.id,
+        status: "draft",
+      })
+      .select()
+      .single();
+    setSaving(false);
+    if (error) { toast.error(`Couldn't save draft: ${error.message}`); return; }
+    setEditEvent(data as EventRow);
+    setView("edit");
+    toast.success("Saved as draft");
+    await refreshEvents();
+  }
+
+  /**
+   * "Publish" never sets events.status directly — RLS blocks organizers
+   * from doing that (events_insert_organizer/events_update_own_organizer
+   * don't permit a non-draft status from this role). Instead this ensures
+   * the event exists as a draft row, then submits a pending row to
+   * `approvals`, exactly like the rest of the admin approval workflow
+   * (ApprovalsScreen) already expects. An admin approving that request is
+   * what will eventually flip the event's status.
+   */
+  async function handlePublish() {
+    if (isGuest || !profile?.id) return;
+    const validationError = validateForm();
+    if (validationError) { toast.error(validationError); return; }
+
+    setSaving(true);
+    const payload = buildEventPayload();
+    let targetId = editEvent?.id ?? null;
+
+    if (targetId) {
+      const { error } = await supabase.from("events").update(payload).eq("id", targetId);
+      if (error) { setSaving(false); toast.error(`Couldn't save event: ${error.message}`); return; }
+    } else {
+      const { data, error } = await supabase
+        .from("events")
+        .insert({
+          ...payload,
+          code: generateEventCode(form.title || "event"),
+          organizer_id: profile.id,
+          status: "draft",
+        })
+        .select()
+        .single();
+      if (error) { setSaving(false); toast.error(`Couldn't save event: ${error.message}`); return; }
+      targetId = (data as EventRow).id;
+    }
+
+    const approvalResult = await submitEventApproval(targetId);
+    setSaving(false);
+    if (approvalResult.status === "error") {
+      toast.error(`Saved as draft, but couldn't submit for approval: ${approvalResult.message}`);
+      await refreshEvents();
+      return;
+    }
+    toast.success("Submitted for admin approval");
+    await refreshEvents();
+    goBack();
+  }
+
+  const filteredEvents = statusTab === "all"
+    ? orgEvents
+    : orgEvents.filter(e => capitalizeStatus(e.status) === statusTab);
 
   const counts: Record<"all" | OrgEventStatus, number> = {
-    all:       ORG_EVENTS.length,
-    Draft:     ORG_EVENTS.filter(e => e.status === "Draft").length,
-    Published: ORG_EVENTS.filter(e => e.status === "Published").length,
-    Live:      ORG_EVENTS.filter(e => e.status === "Live").length,
-    Completed: ORG_EVENTS.filter(e => e.status === "Completed").length,
+    all:       orgEvents.length,
+    Draft:     orgEvents.filter(e => e.status === "draft").length,
+    Published: orgEvents.filter(e => e.status === "published").length,
+    Live:      orgEvents.filter(e => e.status === "live").length,
+    Completed: orgEvents.filter(e => e.status === "completed").length,
   };
 
   // ── Top bar slots ──────────────────────────────────────────────────────────
@@ -994,7 +1162,9 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.25, ease: "easeOut" }}
                 >
-                  {/* Column header */}
+                  {/* Column header + rows — horizontally scrollable on narrow screens */}
+                  <div className="overflow-x-auto">
+                  <div className="min-w-[520px]">
                   <div
                     className="grid items-center px-6 py-3 border-b border-[#DCD4C2]"
                     style={{ gridTemplateColumns: "1fr 130px 80px 104px" }}
@@ -1061,6 +1231,8 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
                       </div>
                     </motion.div>
                   ))}
+                  </div>
+                  </div>
                 </motion.div>
               )}
             </div>
@@ -1747,9 +1919,9 @@ export function OrgAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavigat
       onCreateEvent={() => onNavigate("org-events")}
       isGuest={isGuest}
       topBarLeft={
-        <div className="flex items-center gap-2">
-          <span className="text-[13px] font-semibold text-[#1E1B16]" style={F}>Analytics</span>
-          <span className="text-[#DCD4C2] text-sm">·</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[13px] font-semibold text-[#1E1B16] flex-shrink-0" style={F}>Analytics</span>
+          <span className="text-[#DCD4C2] text-sm flex-shrink-0">·</span>
           <AnalyticsDropdown
             value={eventScope}
             options={ANALYTICS_EVENTS}
@@ -1758,13 +1930,13 @@ export function OrgAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavigat
         </div>
       }
       topBarActions={
-        <div className="flex items-center gap-1.5 p-[3px] bg-[#F6F1E7] border border-[#DCD4C2] rounded-[7px]">
+        <div className="flex items-center gap-1.5 p-[3px] bg-[#F6F1E7] border border-[#DCD4C2] rounded-[7px] overflow-x-auto max-w-full">
           {DATE_RANGE_OPTIONS.map(opt => (
             <button
               key={opt.id}
               type="button"
               onClick={() => setDateRange(opt.id)}
-              className={`px-3 py-[5px] rounded-[5px] text-[11px] font-medium transition-colors ${
+              className={`px-3 py-[5px] rounded-[5px] text-[11px] font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
                 dateRange === opt.id
                   ? "bg-[#1E1B16] text-[#F6F1E7]"
                   : "text-[#6B6355] hover:text-[#1E1B16]"
@@ -2027,7 +2199,9 @@ export function OrgAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavigat
               <span className="text-[9px] text-[#9C8E7E]" style={M}>Check-in rate</span>
             </div>
 
-            {/* Column headers */}
+            {/* Column headers + rows — horizontally scrollable on narrow screens */}
+            <div className="overflow-x-auto">
+            <div className="min-w-[600px]">
             <div className="px-6 py-2.5 border-b border-[#DCD4C2] grid grid-cols-[28px,1fr,120px,80px,80px,100px] gap-4 items-center">
               {["#", "Event", "Date", "Reg.", "Checked In", "Rate"].map(h => (
                 <span key={h} className="text-[8px] tracking-widest uppercase text-[#9C8E7E]" style={M}>{h}</span>
@@ -2090,6 +2264,8 @@ export function OrgAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavigat
                 </div>
               );
             })}
+            </div>
+            </div>
           </motion.div>
 
         </div>
@@ -2442,30 +2618,30 @@ export function OrgCertificatesScreen({ onNavigate, isGuest, profile }: { onNavi
       onCreateEvent={() => onNavigate("org-events")}
       isGuest={isGuest}
       topBarLeft={
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0 overflow-x-auto whitespace-nowrap sm:overflow-visible">
           <button type="button" onClick={() => onNavigate("org-events")}
-            className="flex items-center gap-1.5 text-[12px] text-[#6B6355] hover:text-[#1E1B16] transition-colors"
+            className="flex items-center gap-1.5 text-[12px] text-[#6B6355] hover:text-[#1E1B16] transition-colors flex-shrink-0"
             style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>
             <ArrowLeft size={13} strokeWidth={1.5} /> Events
           </button>
-          <span className="text-[#DCD4C2] text-xs">/</span>
-          <span className="text-[12px] text-[#6B6355]" style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>Certificates</span>
-          <span className="text-[#DCD4C2] text-xs">/</span>
-          <span className="text-[13px] font-semibold text-[#1E1B16] truncate max-w-[220px]" style={F}>{CERT_EVENT_DATA.title}</span>
+          <span className="text-[#DCD4C2] text-xs flex-shrink-0">/</span>
+          <span className="text-[12px] text-[#6B6355] flex-shrink-0" style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>Certificates</span>
+          <span className="text-[#DCD4C2] text-xs flex-shrink-0">/</span>
+          <span className="text-[13px] font-semibold text-[#1E1B16] truncate max-w-[140px] sm:max-w-[220px]" style={F}>{CERT_EVENT_DATA.title}</span>
         </div>
       }
       topBarActions={
         <button type="button" onClick={() => toast("Certificate Templates library — coming soon")}
-          className="flex items-center gap-2 px-3.5 py-[7px] bg-[#FCFAF3] border border-[#DCD4C2] rounded-[6px] text-[12px] text-[#1E1B16] hover:border-[#1E1B16]/35 transition-colors"
+          className="flex items-center gap-2 px-3.5 py-[7px] bg-[#FCFAF3] border border-[#DCD4C2] rounded-[6px] text-[12px] text-[#1E1B16] hover:border-[#1E1B16]/35 transition-colors whitespace-nowrap"
           style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>
-          <Award size={12} strokeWidth={1.5} className="text-[#E2A23B]" />
+          <Award size={12} strokeWidth={1.5} className="text-[#E2A23B] flex-shrink-0" />
           Design template
         </button>
       }
     >
       <main className="flex-1 overflow-auto bg-[#F6F1E7]" style={dotGrid}>
         <div className="px-4 sm:px-8 py-7">
-          <div className="grid grid-cols-[310px,1fr] gap-5">
+          <div className="grid grid-cols-1 lg:grid-cols-[310px,1fr] gap-5">
 
             {/* ── Left: preview + eligibility + action ── */}
             <div className="space-y-4">
@@ -2598,7 +2774,9 @@ export function OrgCertificatesScreen({ onNavigate, isGuest, profile }: { onNavi
                   </motion.button>
                 )}
               </div>
-              {/* Column headers */}
+              {/* Column headers + rows — horizontally scrollable on narrow screens */}
+              <div className="flex-1 overflow-auto">
+              <div className="min-w-[560px]">
               <div className="px-6 py-2.5 border-b border-[#DCD4C2] grid grid-cols-[20px,1fr,120px,86px,106px,56px] gap-4 items-center flex-shrink-0 bg-[#F6F1E7]">
                 <button type="button" onClick={toggleAll}
                   aria-label={allSelected ? "Deselect all" : "Select all"}
@@ -2610,7 +2788,7 @@ export function OrgCertificatesScreen({ onNavigate, isGuest, profile }: { onNavi
                 ))}
               </div>
               {/* Rows */}
-              <div className="flex-1 overflow-y-auto divide-y divide-[#DCD4C2]">
+              <div className="divide-y divide-[#DCD4C2]">
                 {recipients.map((r, i) => {
                   const isChecked = selected.has(r.id);
                   const hasSeal   = sealsVisible.has(r.id);
@@ -2650,6 +2828,8 @@ export function OrgCertificatesScreen({ onNavigate, isGuest, profile }: { onNavi
                     </motion.div>
                   );
                 })}
+              </div>
+              </div>
               </div>
               {/* Footer */}
               <div className="px-6 py-3 border-t border-[#DCD4C2] flex items-center justify-between flex-shrink-0 bg-[#F6F1E7]">
@@ -3222,21 +3402,21 @@ export function OrgAttendeesScreen({
       onCreateEvent={() => onNavigate("org-events")}
       isGuest={isGuest}
       topBarLeft={
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0 overflow-x-auto whitespace-nowrap sm:overflow-visible">
           <button
             type="button"
             onClick={() => onNavigate("org-events")}
             aria-label="Back"
-            className="p-1 text-[#6B6355] hover:text-[#1E1B16] transition-colors"
+            className="p-1 text-[#6B6355] hover:text-[#1E1B16] transition-colors flex-shrink-0"
           >
             <ArrowLeft size={15} strokeWidth={1.5} />
           </button>
-          <div className="w-px h-4 bg-[#DCD4C2]" />
-          <span className="text-[15px] font-semibold text-[#1E1B16]" style={F}>
+          <div className="w-px h-4 bg-[#DCD4C2] flex-shrink-0" />
+          <span className="text-[15px] font-semibold text-[#1E1B16] flex-shrink-0" style={F}>
             Attendee Manager
           </span>
           <span
-            className="text-[9px] px-2 py-[3px] rounded-[4px] max-w-[220px] truncate"
+            className="text-[9px] px-2 py-[3px] rounded-[4px] max-w-[140px] sm:max-w-[220px] truncate flex-shrink-0"
             style={{ ...M, background: "rgba(30,27,22,0.09)", color: "#6B6355" }}
           >
             {event.title}
@@ -3249,10 +3429,10 @@ export function OrgAttendeesScreen({
           onClick={() => toast("Export CSV — coming soon")}
           disabled={isGuest}
           title={isGuest ? "Disabled in guest mode" : undefined}
-          className="flex items-center gap-1.5 px-3.5 py-[7px] rounded-[6px] text-[12px] font-semibold border transition-colors hover:bg-[#FCFAF3] disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3.5 py-[7px] rounded-[6px] text-[12px] font-semibold border transition-colors hover:bg-[#FCFAF3] disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
           style={{ fontFamily: "'Public Sans', system-ui, sans-serif", borderColor: "rgba(30,27,22,0.25)", color: "#1E1B16" }}
         >
-          <Download size={12} strokeWidth={1.8} />
+          <Download size={12} strokeWidth={1.8} className="flex-shrink-0" />
           Export CSV
         </button>
       }
@@ -3299,6 +3479,9 @@ export function OrgAttendeesScreen({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25, ease: "easeOut", delay: 0.3 }}
           >
+            {/* Column headers + rows — horizontally scrollable on narrow screens */}
+            <div className="overflow-x-auto">
+            <div className="min-w-[640px]">
             {/* Column headers */}
             <div
               className="grid items-center px-6 py-3 border-b border-[#DCD4C2]"
@@ -3368,6 +3551,8 @@ export function OrgAttendeesScreen({
                 </motion.div>
               );
             })}
+            </div>
+            </div>
           </motion.div>
 
           {/* Footer */}

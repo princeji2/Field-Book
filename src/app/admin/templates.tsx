@@ -1501,18 +1501,18 @@ export function CertificateTemplatesScreen({ onNavigate, isGuest, profile }: { o
       <main className="flex-1 overflow-auto bg-[#F6F1E7]" style={dotGrid}>
         <div className="px-4 sm:px-8 py-8">
 
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
             <div className="text-[8px] tracking-widest uppercase text-[#6B6355]" style={M}>
               All Templates · {templates.length}
             </div>
             <div className="flex items-center gap-2">
               <span className="flex items-center gap-1 text-[9px]" style={{ ...M, color:"#9C8E7E" }}>
-                <Star size={9} className="text-[#E2A23B]" fill="#E2A23B" /> Default template is used for all new events
+                <Star size={9} className="text-[#E2A23B] flex-shrink-0" fill="#E2A23B" /> Default template is used for all new events
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {templates.map((t, i) => (
               <motion.div key={t.id}
                 layout
@@ -1588,7 +1588,7 @@ export function CertificateTemplatesScreen({ onNavigate, isGuest, profile }: { o
 
       <AnimatePresence>
         {previewTemplate && (
-          <motion.div className="fixed inset-0 z-50 flex items-center justify-center"
+          <motion.div className="fixed inset-0 z-50 flex items-center justify-center overflow-auto px-4 py-8"
             initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
             transition={{ duration:0.15 }}
             onClick={() => setPreviewId(null)}>
@@ -1597,7 +1597,7 @@ export function CertificateTemplatesScreen({ onNavigate, isGuest, profile }: { o
               initial={{ scale:0.94, y:12 }} animate={{ scale:1, y:0 }} exit={{ scale:0.94, y:12 }}
               transition={{ duration:0.2, ease:"easeOut" }}
               onClick={e => e.stopPropagation()}
-              className="relative z-10 flex flex-col gap-3 items-center">
+              className="relative z-10 flex flex-col gap-3 items-center max-w-full overflow-x-auto">
               <TemplateThumbnail template={previewTemplate} scale={1.55} />
               <div className="flex items-center gap-3">
                 <span className="text-[11px] font-medium" style={{ ...F, color:"#F6F1E7" }}>
@@ -1622,7 +1622,7 @@ export function CertificateTemplatesScreen({ onNavigate, isGuest, profile }: { o
 
       <AnimatePresence>
         {showSourceModal && (
-          <motion.div className="fixed inset-0 z-50 flex items-center justify-center"
+          <motion.div className="fixed inset-0 z-50 flex items-center justify-center px-4"
             initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
             transition={{ duration:0.15 }}
             onClick={() => setSourceChoice(null)}>
@@ -1631,8 +1631,8 @@ export function CertificateTemplatesScreen({ onNavigate, isGuest, profile }: { o
               initial={{ scale:0.95, y:8 }} animate={{ scale:1, y:0 }} exit={{ scale:0.95, y:8 }}
               transition={{ duration:0.18, ease:"easeOut" }}
               onClick={e => e.stopPropagation()}
-              className="relative z-10 bg-[#FCFAF3] border border-[#DCD4C2] rounded-[10px] overflow-hidden"
-              style={{ width:480, boxShadow:"0 8px 32px rgba(30,27,22,0.14)" }}>
+              className="relative z-10 bg-[#FCFAF3] border border-[#DCD4C2] rounded-[10px] overflow-hidden w-full max-w-[480px]"
+              style={{ boxShadow:"0 8px 32px rgba(30,27,22,0.14)" }}>
               <div className="px-6 py-5 border-b border-[#DCD4C2] flex items-center justify-between">
                 <div>
                   <div className="text-[14px] font-semibold text-[#1E1B16]" style={F}>Create Template</div>
@@ -1646,7 +1646,7 @@ export function CertificateTemplatesScreen({ onNavigate, isGuest, profile }: { o
                   <X size={14} strokeWidth={1.75} className="text-[#6B6355]" />
                 </button>
               </div>
-              <div className="p-5 grid grid-cols-2 gap-3">
+              <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <button type="button"
                   onClick={() => confirmCreate("scratch")}
                   className="group flex flex-col gap-3 p-5 rounded-[8px] border border-[#DCD4C2] bg-[#F6F1E7] hover:border-[#E2A23B] hover:bg-[rgba(226,162,59,0.04)] transition-colors text-left">

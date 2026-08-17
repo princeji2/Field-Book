@@ -158,8 +158,8 @@ export function AdminDashboard({ onNavigate, livePendingApprovals, livePendingRo
                 />
               </div>
             )}
-            <div className="px-6 py-5 flex items-start justify-between gap-6">
-              <div className="flex-1 min-w-0">
+            <div className="px-6 py-5 flex flex-col sm:flex-row items-start justify-between gap-6">
+              <div className="flex-1 min-w-0 w-full">
                 <div className="flex items-center gap-3 mb-3">
                   {pendingCount > 0 ? (
                     <>

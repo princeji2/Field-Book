@@ -129,19 +129,19 @@ export function AdminAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavig
       onLogOut={() => { void signOutUser(); onNavigate("admin-login"); }}
       onNav={adminNavHandler}
       topBarLeft={
-        <div className="flex items-center gap-2.5">
-          <span className="text-[13px] font-semibold text-[#1E1B16]" style={F}>Analytics</span>
-          <span className="text-[#DCD4C2] text-sm">·</span>
-          <span className="text-[10px]" style={{ ...M, color:"#9C8E7E" }}>Platform-wide</span>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="text-[13px] font-semibold text-[#1E1B16] flex-shrink-0" style={F}>Analytics</span>
+          <span className="text-[#DCD4C2] text-sm flex-shrink-0">·</span>
+          <span className="text-[10px] truncate" style={{ ...M, color:"#9C8E7E" }}>Platform-wide</span>
         </div>
       }
       topBarActions={
-        <div className="flex items-center gap-1.5 p-[3px] bg-[#F6F1E7] border border-[#DCD4C2] rounded-[7px]">
+        <div className="flex items-center gap-1.5 p-[3px] bg-[#F6F1E7] border border-[#DCD4C2] rounded-[7px] overflow-x-auto max-w-full">
           {ADMIN_DATE_RANGE_OPTIONS.map(opt => (
             <button key={opt.id} type="button"
               onClick={() => setDateRange(opt.id)}
               aria-pressed={dateRange === opt.id}
-              className={`px-3 py-[5px] rounded-[5px] text-[11px] font-medium transition-colors ${
+              className={`px-3 py-[5px] rounded-[5px] text-[11px] font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
                 dateRange === opt.id
                   ? "bg-[#1E1B16] text-[#F6F1E7]"
                   : "text-[#6B6355] hover:text-[#1E1B16]"
@@ -418,7 +418,9 @@ export function AdminAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavig
                 ))}
               </div>
 
-              {/* Column headers */}
+              {/* Column headers + rows — horizontally scrollable on narrow screens */}
+              <div className="flex-1 overflow-auto">
+              <div className="min-w-[480px]">
               <div className="flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] px-6 py-2"
                 style={{ display:"grid",
                   gridTemplateColumns: topTab === "organizers"
@@ -434,7 +436,7 @@ export function AdminAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavig
               </div>
 
               {/* Rows */}
-              <div className="flex-1 overflow-y-auto divide-y divide-[#DCD4C2]">
+              <div className="divide-y divide-[#DCD4C2]">
                 <AnimatePresence mode="wait">
                   <motion.div key={topTab}
                     initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
@@ -510,6 +512,8 @@ export function AdminAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavig
                     })}
                   </motion.div>
                 </AnimatePresence>
+              </div>
+              </div>
               </div>
             </motion.div>
 
