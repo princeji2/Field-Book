@@ -190,6 +190,93 @@ export async function signOutUser(): Promise<void> {
   await supabase.auth.signOut();
 }
 
+export type RequestPasswordResetResult =
+  | { status: "success" }
+  | { status: "error"; message: string };
+
+/**
+ * Maps resetPasswordForEmail's error codes to user-safe copy, same
+ * convention as otpErrorMessage above. Note that Supabase deliberately does
+ * NOT return an error for "no account with this email" (that would let an
+ * attacker enumerate registered addresses) — a success result here only
+ * means the request was accepted, not that an email is guaranteed to land
+ * in an inbox for that address.
+ */
+function passwordResetErrorMessage(error: { code?: string; message?: string } | null | undefined): string {
+  switch (error?.code) {
+    case "over_email_send_rate_limit":
+    case "over_request_rate_limit":
+      return "Too many attempts. Please wait a moment before trying again.";
+    case "validation_failed":
+      return "Enter a valid email address.";
+    default:
+      return "Something went wrong sending the reset link. Please try again.";
+  }
+}
+
+/**
+ * Requests a password-reset email for the given address, via
+ * resetPasswordForEmail (this project's PKCE flow config in
+ * supabaseClient.ts means the link Supabase sends carries a ?code=...,
+ * exchanged for a temporary recovery session automatically when the link
+ * is opened at redirectTo — see ResetCallbackRoute.tsx). The redirectTo
+ * origin must be present in Supabase's Authentication -> URL Configuration
+ * -> Redirect URLs allow-list, or Supabase silently refuses the redirect.
+ */
+export async function requestPasswordReset(email: string): Promise<RequestPasswordResetResult> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/auth/reset-callback`,
+  });
+  if (error) return { status: "error", message: passwordResetErrorMessage(error) };
+  return { status: "success" };
+}
+
+export type UpdatePasswordResult =
+  | { status: "success" }
+  | { status: "error"; message: string };
+
+/** Maps updateUser's password-change error codes to user-safe copy. */
+function updatePasswordErrorMessage(error: { code?: string; message?: string } | null | undefined): string {
+  switch (error?.code) {
+    case "same_password":
+      return "New password must be different from your current password.";
+    case "weak_password":
+      return "Choose a stronger password (at least 8 characters).";
+    case "session_not_found":
+    case "user_not_found":
+      return "This reset link has expired. Request a new one.";
+    default:
+      return "Couldn't update your password. Try again, or request a new reset link.";
+  }
+}
+
+/**
+ * Sets a new password on the currently active session — the temporary
+ * recovery session Supabase establishes when a user opens their reset-link
+ * (see ResetCallbackRoute.tsx). Must only be called while that session is
+ * active; a missing/expired session surfaces as an error here rather than
+ * throwing, same discriminated-result pattern as the rest of this file.
+ */
+export async function updatePassword(password: string): Promise<UpdatePasswordResult> {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { status: "error", message: updatePasswordErrorMessage(error) };
+  return { status: "success" };
+}
+
+/**
+ * True if there's currently an active Supabase session. Used by
+ * ResetPasswordPage to confirm the temporary "recovery" session Supabase
+ * establishes from the reset-link's ?code=... (exchanged automatically on
+ * load — supabaseClient.ts has detectSessionInUrl: true, same mechanism
+ * AuthCallbackRoute relies on for Google OAuth) actually came through,
+ * before showing the new-password form. An expired or already-used link
+ * produces no session at all.
+ */
+export async function hasActiveSession(): Promise<boolean> {
+  const { data } = await supabase.auth.getSession();
+  return !!data.session;
+}
+
 /**
  * Starts the Google OAuth flow via Supabase Auth. This causes a full-page
  * redirect to Google's account picker (window.location.assign under the

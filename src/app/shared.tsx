@@ -18,7 +18,7 @@ import {
   BarChart, Bar, Cell,
 } from "recharts";
 import { toast, Toaster } from "sonner";
-import { signUpWithProfile, roleToScreen, signOutUser, getCurrentUserProfile, signInWithGoogle, verifySignupOtp, resendSignupOtp, type SignupRole, type AuthedProfile } from "../lib/auth";
+import { signUpWithProfile, roleToScreen, signOutUser, getCurrentUserProfile, signInWithGoogle, verifySignupOtp, resendSignupOtp, requestPasswordReset, type SignupRole, type AuthedProfile } from "../lib/auth";
 
 // ─── Typography shorthand ───────────────────────────────────────────────────
 export const F = { fontFamily: "'Fraunces', Georgia, serif" } as const;
@@ -1280,8 +1280,9 @@ export function SignupPage({ onNavigate, onAuthenticated }: { onNavigate: (s: Sc
 export function ForgotPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
   const [email, setEmail]       = useState("");
   const [emailErr, setEmailErr] = useState("");
-  const [phase, setPhase]       = useState<"request" | "sent">("request");
+  const [phase, setPhase]       = useState<"request" | "sending" | "sent">("request");
   const [cooldown, setCooldown] = useState(0);
+  const [resendErr, setResendErr] = useState("");
 
   // Decrement countdown one second at a time
   useEffect(() => {
@@ -1296,17 +1297,33 @@ export function ForgotPage({ onNavigate }: { onNavigate: (s: Screen) => void }) 
     return "";
   }
 
-  function handleSubmit(ev: React.FormEvent) {
+  async function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault();
     const err = validateEmail(email);
     setEmailErr(err);
     if (err) return;
+
+    setPhase("sending");
+    const result = await requestPasswordReset(email);
+
+    if (result.status === "error") {
+      setEmailErr(result.message);
+      setPhase("request");
+      return;
+    }
+
     setPhase("sent");
     setCooldown(60);
   }
 
-  function handleResend() {
+  async function handleResend() {
     if (cooldown > 0) return;
+    setResendErr("");
+    const result = await requestPasswordReset(email);
+    if (result.status === "error") {
+      setResendErr(result.message);
+      return;
+    }
     setCooldown(60);
   }
 
@@ -1318,9 +1335,9 @@ export function ForgotPage({ onNavigate }: { onNavigate: (s: Screen) => void }) 
         <div className="w-full max-w-[400px]">
           <AuthCard
             eyebrow="Account Recovery"
-            title={phase === "request" ? "Reset your password." : "Check your email."}
+            title={phase === "request" || phase === "sending" ? "Reset your password." : "Check your email."}
             subtitle={
-              phase === "request"
+              phase === "request" || phase === "sending"
                 ? "Enter your college email and we'll send a reset link directly to your inbox."
                 : undefined
             }
@@ -1328,7 +1345,7 @@ export function ForgotPage({ onNavigate }: { onNavigate: (s: Screen) => void }) 
             <AnimatePresence mode="wait">
 
               {/* ── Request form ── */}
-              {phase === "request" && (
+              {(phase === "request" || phase === "sending") && (
                 <motion.form
                   key="request"
                   onSubmit={handleSubmit}
@@ -1352,6 +1369,7 @@ export function ForgotPage({ onNavigate }: { onNavigate: (s: Screen) => void }) 
                       id="fp-email"
                       type="email"
                       value={email}
+                      disabled={phase === "sending"}
                       onChange={e => { setEmail(e.target.value); if (emailErr) setEmailErr(""); }}
                       onBlur={() => setEmailErr(validateEmail(email))}
                       placeholder="you@university.edu"
@@ -1370,9 +1388,14 @@ export function ForgotPage({ onNavigate }: { onNavigate: (s: Screen) => void }) 
                   {/* Primary action */}
                   <button
                     type="submit"
-                    className="w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors"
+                    disabled={phase === "sending"}
+                    className="w-full flex items-center justify-center gap-2 px-6 py-2.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Send Reset Link <ArrowRight size={13} />
+                    {phase === "sending" ? (
+                      <RefreshCw size={13} className="animate-spin" />
+                    ) : (
+                      <><span>Send Reset Link</span><ArrowRight size={13} /></>
+                    )}
                   </button>
 
                   {/* Back to login */}
@@ -1430,6 +1453,9 @@ export function ForgotPage({ onNavigate }: { onNavigate: (s: Screen) => void }) 
                         "Resend email →"
                       )}
                     </button>
+                    {resendErr && (
+                      <p className="text-[9px] text-[#B5432E]" style={M}>{resendErr}</p>
+                    )}
                   </div>
 
                   {/* Back to login */}
