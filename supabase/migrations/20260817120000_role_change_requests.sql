@@ -35,13 +35,23 @@
 -- Table
 -- ─────────────────────────────────────────────────────────────────────────
 
+-- "current_role" is quoted throughout this migration (table definition,
+-- RLS policy, and both RPC functions below) because CURRENT_ROLE is a
+-- reserved keyword in PostgreSQL (a niladic SQL-standard construct, same
+-- category as CURRENT_USER/SESSION_USER) — an unquoted bare use of it
+-- anywhere, including as a column name, is a syntax error, not just a
+-- naming clash. Quoting rather than renaming: the frontend
+-- (src/lib/roleRequests.ts) already selects/inserts this exact column
+-- name as "current_role" in its PostgREST queries, so quoting keeps the
+-- column name unchanged and requires no frontend changes, whereas a
+-- rename would need every one of those call sites updated too.
 create table public.role_change_requests (
   id             uuid primary key default gen_random_uuid(),
   user_id        uuid not null references public.profiles(id) on delete cascade,
-  current_role   text not null check (current_role in ('student', 'organizer', 'admin')),
+  "current_role" text not null check ("current_role" in ('student', 'organizer', 'admin')),
   requested_role text not null check (requested_role in ('student', 'organizer', 'admin')),
   -- A request to "change" to the role you already hold isn't a role change.
-  constraint role_change_requests_role_differs check (requested_role <> current_role),
+  constraint role_change_requests_role_differs check (requested_role <> "current_role"),
   status         text not null default 'pending'
                    check (status in ('pending', 'approved', 'rejected')),
   reason         text,
@@ -91,7 +101,7 @@ create policy "role_change_requests_insert_own" on public.role_change_requests
 for insert to authenticated
 with check (
   user_id = auth.uid()
-  and current_role = public.current_profile_role()
+  and "current_role" = public.current_profile_role()
   and status = 'pending'
   and reviewed_at is null
   and reviewed_by is null
@@ -165,7 +175,7 @@ begin
 
   insert into public.audit_log (actor_id, target_id, action, old_value, new_value)
   values (auth.uid(), v_request.user_id, 'role_change_request_approved',
-          v_request.current_role, v_request.requested_role);
+          v_request."current_role", v_request.requested_role);
 
   return v_request;
 end;
@@ -210,7 +220,7 @@ begin
 
   insert into public.audit_log (actor_id, target_id, action, old_value, new_value)
   values (auth.uid(), v_request.user_id, 'role_change_request_rejected',
-          v_request.current_role, v_request.requested_role);
+          v_request."current_role", v_request.requested_role);
 
   return v_request;
 end;
