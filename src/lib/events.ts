@@ -171,3 +171,89 @@ export function capitalizeStatus(status: EventStatus): "Draft" | "Published" | "
   if (status === "completed") return "Completed";
   return "Draft";
 }
+
+/**
+ * Student-facing display shape, built from a real `events` row plus its
+ * organizer's name (from organizer_directory). Mirrors the fields the
+ * Explore/Event-detail screens already rendered from mock data
+ * (EventItem in student.tsx), so swapping the data source doesn't require
+ * rewriting every consumer.
+ *
+ * `spots` is set equal to `capacity` — there is no registrations/attendees
+ * table yet (see MyEventsScreen's mock MY_UPCOMING/MY_PAST), so there is no
+ * real "seats remaining" figure to compute. This shows the event as fully
+ * open rather than fabricating a remaining-seats number.
+ */
+export interface StudentEventCard {
+  id: string;
+  title: string;
+  category: string;
+  dept: string;
+  date: string;
+  time: string;
+  venue: string;
+  organizer: string;
+  spots: number;
+  capacity: number;
+  live: boolean;
+  code: string;
+  description: string | null;
+}
+
+function toStudentEventCard(row: EventRow, organizerName: string | undefined): StudentEventCard {
+  return {
+    id: row.id,
+    title: row.title,
+    category: row.category ?? "General",
+    dept: row.department ?? "General",
+    date: formatEventDate(row.event_date),
+    time: formatEventTimeRange(row.start_time, row.end_time),
+    venue: row.location_type === "online" ? "Online" : (row.venue ?? "Venue TBD"),
+    organizer: organizerName ?? "Fieldbook Organizer",
+    spots: row.capacity,
+    capacity: row.capacity,
+    live: row.status === "live",
+    code: row.code,
+    description: row.description,
+  };
+}
+
+export type ListStudentEventsResult =
+  | { status: "success"; events: StudentEventCard[] }
+  | { status: "error"; message: string };
+
+/**
+ * Fetches every publicly-visible event (events_select_public RLS —
+ * published/live/completed) and resolves each organizer's display name in
+ * one batched follow-up query. This is the real-data replacement for the
+ * EXPLORE_EVENTS mock array in student.tsx.
+ */
+export async function listStudentExploreEvents(): Promise<ListStudentEventsResult> {
+  const result = await listPublicEvents();
+  if (result.status === "error") return result;
+
+  const organizerIds = result.events.map(e => e.organizer_id).filter((id): id is string => !!id);
+  const nameMap = await fetchOrganizerNames(organizerIds);
+
+  const events = result.events.map(row => toStudentEventCard(row, row.organizer_id ? nameMap.get(row.organizer_id) : undefined));
+  return { status: "success", events };
+}
+
+export type GetStudentEventResult =
+  | { status: "success"; event: StudentEventCard }
+  | { status: "error"; message: string };
+
+/** Fetches a single publicly-visible event by id, with its organizer's display name resolved. */
+export async function getStudentEventById(id: string): Promise<GetStudentEventResult> {
+  const result = await getEventById(id);
+  if (result.status === "error") return result;
+
+  const nameMap = result.event.organizer_id
+    ? await fetchOrganizerNames([result.event.organizer_id])
+    : new Map<string, string>();
+
+  return {
+    status: "success",
+    event: toStudentEventCard(result.event, result.event.organizer_id ? nameMap.get(result.event.organizer_id) : undefined),
+  };
+}

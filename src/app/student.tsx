@@ -24,10 +24,35 @@ import {
 import { ProfileScreen } from "./profile";
 import { type AuthedProfile } from "../lib/auth";
 import { generateCertificate, generateCertificateCode } from "../lib/certificates";
+import {
+  type StudentEventCard,
+  listStudentExploreEvents,
+  getStudentEventById,
+} from "../lib/events";
 
 // ─── Student Dashboard ────────────────────────────────────────────────────────
 export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const [activeNav, setActiveNav] = useState("dashboard");
+
+  // Explore preview widget below is real data (events_select_public RLS).
+  // "Next Up" and "Certificates" summary cards above/below it still render
+  // fixed placeholder content — there is no registrations/attendees table
+  // yet to know which events THIS student is registered for or has
+  // checked into (see the note on MyEventsScreen), so "Next Up" can't be
+  // computed from real data without inventing that table. Flagged rather
+  // than wired to a fake per-student query.
+  const [previewEvents, setPreviewEvents] = useState<EventItem[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const result = await listStudentExploreEvents();
+      if (!cancelled && result.status === "success") {
+        setPreviewEvents(result.events.slice(0, 3));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   function handleNav(id: string) {
     if (id === "profile")  { onNavigate?.("profile");  return; }
@@ -212,12 +237,12 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
                 <p className="text-[9px] tracking-widest uppercase text-[#6B6355]" style={M}>Explore</p>
                 <Compass size={13} className="text-[#6B6355]" strokeWidth={1.5} />
               </div>
-              {[
-                { title: "Urban Ecology Workshop",  dept: "Biology",         date: "Nov 18", spots: 12 },
-                { title: "Leadership Summit 2024",   dept: "Student Life",    date: "Nov 22", spots: 8  },
-                { title: "Tech Ethics Panel",        dept: "CS / Philosophy", date: "Nov 29", spots: 24 },
-              ].map((ev, i, arr) => (
-                <div key={ev.title} className={`px-5 py-3.5 ${i < arr.length - 1 ? "border-b border-[#DCD4C2]" : ""}`}>
+              {previewEvents.length === 0 ? (
+                <div className="px-5 py-6 text-center">
+                  <p className="text-[10px] text-[#9C8E7E]" style={M}>No published events yet.</p>
+                </div>
+              ) : previewEvents.map((ev, i, arr) => (
+                <div key={ev.id} className={`px-5 py-3.5 ${i < arr.length - 1 ? "border-b border-[#DCD4C2]" : ""}`}>
                   <div className="text-xs font-medium text-[#1E1B16] leading-snug mb-1" style={F}>{ev.title}</div>
                   <div className="flex items-center justify-between mb-0.5">
                     <span className="text-[9px] text-[#6B6355]" style={M}>{ev.dept}</span>
@@ -307,31 +332,13 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
 }
 
 // ─── Explore Events data ──────────────────────────────────────────────────────
-type EventItem = {
-  id: string;
-  title: string;
-  category: string;
-  dept: string;
-  date: string;
-  time: string;
-  venue: string;
-  organizer: string;
-  spots: number;
-  capacity: number;
-  live: boolean;
-  code: string;
-};
-
-const EXPLORE_EVENTS: EventItem[] = [
-  { id: "1", title: "Environmental Policy Symposium",  category: "Academic",    dept: "Environmental Science", date: "Nov 14, 2024", time: "9:00 – 11:30 AM", venue: "Whitman Hall, Rm 204",              organizer: "Prof. Andrei Volkov",       spots: 47, capacity: 120, live: true,  code: "ENV-POL-2024"  },
-  { id: "2", title: "Urban Ecology Workshop",           category: "Workshop",    dept: "Biology",               date: "Nov 18, 2024", time: "2:00 – 5:00 PM",  venue: "Life Sciences Bldg, B-12",         organizer: "Dr. Priya Mehta",           spots: 12, capacity: 30,  live: false, code: "BIO-ECO-2024"  },
-  { id: "3", title: "Leadership Summit 2024",           category: "Leadership",  dept: "Student Life",          date: "Nov 22, 2024", time: "10:00 AM – 4:00 PM", venue: "Student Union, Main Hall",      organizer: "Office of Student Affairs", spots: 8,  capacity: 200, live: false, code: "LDR-SUM-2024"  },
-  { id: "4", title: "Tech Ethics Panel: AI in Academia", category: "Academic",  dept: "CS / Philosophy",       date: "Nov 29, 2024", time: "4:00 – 6:00 PM",  venue: "Engineering Hall, Rm 101",         organizer: "Prof. James O'Brien",       spots: 24, capacity: 80,  live: false, code: "TECH-ETH-2024" },
-  { id: "5", title: "Design Thinking Workshop",         category: "Workshop",    dept: "Arts & Design",         date: "Dec 5, 2024",  time: "1:00 – 4:00 PM",  venue: "Arts Building, Studio 3",          organizer: "Design Lab",                spots: 18, capacity: 25,  live: false, code: "DSN-THK-2024"  },
-  { id: "6", title: "Entrepreneurship Bootcamp",        category: "Career",      dept: "Business School",       date: "Dec 10, 2024", time: "9:00 AM – 3:00 PM", venue: "Business Hall, Conf. Center",    organizer: "Startup Incubator",         spots: 35, capacity: 60,  live: false, code: "ENT-BTC-2024"  },
-  { id: "7", title: "Global Health Forum",              category: "Academic",    dept: "Public Health",         date: "Dec 12, 2024", time: "11:00 AM – 2:00 PM", venue: "Health Sciences, Auditorium",   organizer: "Dr. Maria Santos",          spots: 60, capacity: 150, live: false, code: "GLB-HLT-2024"  },
-  { id: "8", title: "Winter Research Symposium",        category: "Research",    dept: "Graduate School",       date: "Dec 18, 2024", time: "9:00 AM – 5:00 PM",  venue: "Library, Research Commons",    organizer: "Graduate Research Office",  spots: 40, capacity: 100, live: false, code: "WRS-2024"       },
-];
+// EventItem is now StudentEventCard (real events-table rows, resolved with
+// the organizer's display name) — see src/lib/events.ts. The
+// EXPLORE_EVENTS mock array that used to live here is gone; ExploreScreen
+// and EventDetailScreen below fetch real data via listStudentExploreEvents()
+// / getStudentEventById(), both scoped by the events_select_public RLS
+// policy (status in published/live/completed).
+type EventItem = StudentEventCard;
 
 const CATEGORIES   = ["All", "Academic", "Workshop", "Leadership", "Career", "Research"] as const;
 const DATE_OPTIONS = ["All Dates", "This Week", "This Month", "Next Month"] as const;
@@ -629,14 +636,40 @@ export function EventDetailScreen({
   isGuest?: boolean;
   profile?: AuthedProfile | null;
 }) {
-  const ev = EXPLORE_EVENTS.find(e => e.id === eventId) ?? EXPLORE_EVENTS[0];
-  const details = EVENT_DETAILS[ev.id];
+  const [ev, setEv] = useState<EventItem | null>(null);
+  const [related, setRelated] = useState<EventItem[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [registered, setRegistered] = useState(false);
-  const spotsLow = ev.spots <= 10;
 
-  const CategoryIcon = CATEGORY_ICONS[ev.category] ?? Compass;
-  const heroGradient = CATEGORY_HERO[ev.category] ?? CATEGORY_HERO["Academic"];
-  const related = EXPLORE_EVENTS.filter(e => e.category === ev.category && e.id !== ev.id).slice(0, 3);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [detailResult, listResult] = await Promise.all([
+        getStudentEventById(eventId),
+        listStudentExploreEvents(),
+      ]);
+      if (cancelled) return;
+      if (detailResult.status === "error") {
+        setLoadError(detailResult.message);
+        return;
+      }
+      setEv(detailResult.event);
+      if (listResult.status === "success") {
+        setRelated(
+          listResult.events
+            .filter(e => e.category === detailResult.event.category && e.id !== detailResult.event.id)
+            .slice(0, 3)
+        );
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [eventId]);
+
+  const details = ev ? EVENT_DETAILS[ev.id] : undefined;
+  const spotsLow = ev ? ev.spots <= 10 : false;
+
+  const CategoryIcon = ev ? (CATEGORY_ICONS[ev.category] ?? Compass) : Compass;
+  const heroGradient = ev ? (CATEGORY_HERO[ev.category] ?? CATEGORY_HERO["Academic"]) : CATEGORY_HERO["Academic"];
 
   const backButton = (
     <button
@@ -648,6 +681,37 @@ export function EventDetailScreen({
     </button>
   );
 
+  const shellNav = (id: string) => {
+    if (id === "profile")   { onNavigate("profile");   return; }
+    if (id === "landing")   { onNavigate("landing");   return; }
+    if (id === "dashboard") { onNavigate("dashboard"); return; }
+    if (id === "explore")   { onNavigate("explore");   return; }
+    if (id === "events")    { onNavigate("myevents");  return; }
+    if (id === "certs")     { onNavigate("certs");     return; }
+    if (id === "notifs")    { onNavigate("notifs");    return; }
+  };
+
+  if (loadError || !ev) {
+    return (
+      <AppShell
+        activeNav="explore"
+        notifCount={3}
+        studentName={profile?.fullName ?? "Sarah Chen"}
+        studentId={profile?.id ?? "SCH-4421"}
+        isGuest={isGuest}
+        topBarLeft={backButton}
+        onNav={shellNav}
+        onNavigate={onNavigate}
+      >
+        <main className="flex-1 overflow-auto bg-[#F6F1E7] flex items-center justify-center">
+          <p className="text-sm text-[#6B6355]" style={{ fontFamily: "'Public Sans', system-ui, sans-serif" }}>
+            {loadError ? `Couldn't load this event: ${loadError}` : "Loading event…"}
+          </p>
+        </main>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell
       activeNav="explore"
@@ -656,15 +720,7 @@ export function EventDetailScreen({
       studentId={profile?.id ?? "SCH-4421"}
       isGuest={isGuest}
       topBarLeft={backButton}
-      onNav={(id) => {
-        if (id === "profile")   { onNavigate("profile");   return; }
-        if (id === "landing")   { onNavigate("landing");   return; }
-        if (id === "dashboard") { onNavigate("dashboard"); return; }
-        if (id === "explore")   { onNavigate("explore");   return; }
-        if (id === "events")    { onNavigate("myevents");  return; }
-        if (id === "certs")     { onNavigate("certs");     return; }
-        if (id === "notifs")    { onNavigate("notifs");    return; }
-      }}
+      onNav={shellNav}
       onNavigate={onNavigate}
     >
       <main className="flex-1 overflow-auto bg-[#F6F1E7]">
@@ -944,9 +1000,29 @@ export function ExploreScreen({
   const [category,   setCategory]    = useState("All");
   const [dateFilter, setDateFilter]   = useState("All Dates");
   const [liveOnly,   setLiveOnly]     = useState(false);
-  const [registeredIds, setRegisteredIds] = useState<string[]>(["5"]); // Design Thinking pre-registered
+  const [registeredIds, setRegisteredIds] = useState<string[]>([]);
   const [visibleCount, setVisibleCount]   = useState(6);
   const [activeNav, setActiveNav]     = useState("explore");
+
+  // Real events (events_select_public RLS — published/live/completed),
+  // replacing the EXPLORE_EVENTS mock array.
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setEventsLoading(true);
+      const result = await listStudentExploreEvents();
+      if (cancelled) return;
+      setEventsLoading(false);
+      if (result.status === "error") { setEventsError(result.message); return; }
+      setEventsError(null);
+      setEvents(result.events);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   function handleNav(id: string) {
     if (id === "profile")   { onNavigate("profile");   return; }
@@ -967,7 +1043,7 @@ export function ExploreScreen({
     return true;
   }
 
-  const filtered = EXPLORE_EVENTS.filter(ev => {
+  const filtered = events.filter(ev => {
     if (liveOnly && !ev.live) return false;
     if (category !== "All" && ev.category !== category) return false;
     if (!matchesDate(ev.date)) return false;
@@ -1088,8 +1164,22 @@ export function ExploreScreen({
             )}
           </div>
 
+          {/* ── Loading state ── */}
+          {eventsLoading && (
+            <div className="py-20 flex items-center justify-center">
+              <RefreshCw size={18} strokeWidth={1.5} className="text-[#9C8E7E] animate-spin" />
+            </div>
+          )}
+
+          {/* ── Error state ── */}
+          {!eventsLoading && eventsError && (
+            <div className="py-20 flex flex-col items-center text-center">
+              <p className="text-sm text-[#B5432E]">Couldn't load events: {eventsError}</p>
+            </div>
+          )}
+
           {/* ── Empty state ── */}
-          {filtered.length === 0 && (
+          {!eventsLoading && !eventsError && filtered.length === 0 && (
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1103,19 +1193,23 @@ export function ExploreScreen({
                 No events found.
               </h3>
               <p className="text-sm text-[#6B6355] mb-7 max-w-xs leading-relaxed">
-                No events match your current search or filters. Try adjusting them or clearing everything.
+                {events.length === 0
+                  ? "No published events yet. Check back soon."
+                  : "No events match your current search or filters. Try adjusting them or clearing everything."}
               </p>
-              <button
-                onClick={clearFilters}
-                className="flex items-center gap-2 px-5 py-2 border border-[#1E1B16]/25 rounded-[7px] text-sm text-[#1E1B16] hover:border-[#1E1B16]/50 transition-colors"
-              >
-                Clear all filters <ArrowRight size={12} />
-              </button>
+              {events.length > 0 && (
+                <button
+                  onClick={clearFilters}
+                  className="flex items-center gap-2 px-5 py-2 border border-[#1E1B16]/25 rounded-[7px] text-sm text-[#1E1B16] hover:border-[#1E1B16]/50 transition-colors"
+                >
+                  Clear all filters <ArrowRight size={12} />
+                </button>
+              )}
             </motion.div>
           )}
 
           {/* ── Event card grid ── */}
-          {visible.length > 0 && (
+          {!eventsLoading && visible.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
               {visible.map((ev, i) => (
                 <motion.div

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft, Check, X, Plus, Upload, Pencil, Copy, Star,
   MoreHorizontal, Trash2, RefreshCw, Eye as EyeIcon, BookMarked, LayoutTemplate,
+  Monitor,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as pdfjsLib from "pdfjs-dist";
@@ -13,6 +14,23 @@ import { AdminAppShell } from "./shell";
 import { signOutUser, type AuthedProfile } from "../../lib/auth";
 import { uploadToBucket, buildObjectPath } from "../../lib/storage";
 import { supabase } from "../../lib/supabaseClient";
+
+// Phone-width cutoff for gating the template editor canvas — narrower than the
+// sidebar's 768px mobile breakpoint so tablets (portrait iPad etc.) still get the editor.
+const EDITOR_MIN_WIDTH = 640;
+
+function useIsNarrowViewport(threshold: number) {
+  const [isNarrow, setIsNarrow] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < threshold : false
+  );
+  useEffect(() => {
+    function check() { setIsNarrow(window.innerWidth < threshold); }
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, [threshold]);
+  return isNarrow;
+}
 
 // ─── Certificate Templates ────────────────────────────────────────────────────
 
@@ -334,6 +352,7 @@ function TemplateEditor({
 
   const isCustomMode = bgImage !== null;
   const CANVAS_W = 560;
+  const isNarrowViewport = useIsNarrowViewport(EDITOR_MIN_WIDTH);
 
   const accentOptions = [
     { label:"Marigold",       value:"#E2A23B" },
@@ -738,47 +757,78 @@ function TemplateEditor({
 
   return (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-      <div className="flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] h-14 flex items-center gap-4 px-8">
+      <div className="flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] h-14 flex items-center gap-4 px-4 sm:px-8">
         <button type="button" onClick={onBack}
-          className="flex items-center gap-1.5 text-[12px] text-[#6B6355] hover:text-[#1E1B16] transition-colors"
+          className="flex items-center gap-1.5 text-[12px] text-[#6B6355] hover:text-[#1E1B16] transition-colors flex-shrink-0"
           style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
           <ArrowLeft size={13} strokeWidth={1.5} /> Templates
         </button>
-        <span className="text-[#DCD4C2] text-xs">/</span>
-        <input
-          value={name}
-          onChange={e => setName(e.target.value)}
-          className="text-[13px] font-semibold bg-transparent border-b border-transparent hover:border-[#DCD4C2] focus:border-[#1E1B16]/30 outline-none text-[#1E1B16] transition-colors px-1"
-          style={F}
-        />
-        <div className="ml-auto flex items-center gap-2">
-          <button type="button"
-            onClick={() => setPreviewMode(v => !v)}
-            className="flex items-center gap-1.5 px-3 py-[7px] rounded-[6px] text-[12px] border transition-colors"
-            style={{
-              fontFamily:"'Public Sans',system-ui,sans-serif",
-              borderColor: previewMode ? "#1E1B16" : "#DCD4C2",
-              background: previewMode ? "#1E1B16" : "transparent",
-              color: previewMode ? "#F6F1E7" : "#6B6355",
-            }}>
-            <EyeIcon size={12} strokeWidth={1.75} />
-            {previewMode ? "Editing" : "Preview"}
-          </button>
-          <button type="button" onClick={onBack}
-            className="px-3.5 py-[7px] rounded-[6px] text-[12px] font-medium border border-[#DCD4C2] text-[#6B6355] hover:border-[#1E1B16]/30 hover:text-[#1E1B16] transition-colors"
-            style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
-            Discard
-          </button>
-          <button type="button" onClick={handleSave}
-            disabled={isGuest}
-            title={isGuest ? "Disabled in guest mode" : undefined}
-            className="flex items-center gap-2 px-4 py-[7px] rounded-[6px] text-[12px] font-semibold transition-opacity hover:opacity-85 disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background:"#E2A23B", color:"#1E1B16", fontFamily:"'Public Sans',system-ui,sans-serif" }}>
-            <Check size={12} strokeWidth={2.5} /> Save template
-          </button>
-        </div>
+        {!isNarrowViewport && (
+          <>
+            <span className="text-[#DCD4C2] text-xs">/</span>
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className="text-[13px] font-semibold bg-transparent border-b border-transparent hover:border-[#DCD4C2] focus:border-[#1E1B16]/30 outline-none text-[#1E1B16] transition-colors px-1 min-w-0"
+              style={F}
+            />
+          </>
+        )}
+        {!isNarrowViewport && (
+          <div className="ml-auto flex items-center gap-2">
+            <button type="button"
+              onClick={() => setPreviewMode(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-[7px] rounded-[6px] text-[12px] border transition-colors"
+              style={{
+                fontFamily:"'Public Sans',system-ui,sans-serif",
+                borderColor: previewMode ? "#1E1B16" : "#DCD4C2",
+                background: previewMode ? "#1E1B16" : "transparent",
+                color: previewMode ? "#F6F1E7" : "#6B6355",
+              }}>
+              <EyeIcon size={12} strokeWidth={1.75} />
+              {previewMode ? "Editing" : "Preview"}
+            </button>
+            <button type="button" onClick={onBack}
+              className="px-3.5 py-[7px] rounded-[6px] text-[12px] font-medium border border-[#DCD4C2] text-[#6B6355] hover:border-[#1E1B16]/30 hover:text-[#1E1B16] transition-colors"
+              style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
+              Discard
+            </button>
+            <button type="button" onClick={handleSave}
+              disabled={isGuest}
+              title={isGuest ? "Disabled in guest mode" : undefined}
+              className="flex items-center gap-2 px-4 py-[7px] rounded-[6px] text-[12px] font-semibold transition-opacity hover:opacity-85 disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ background:"#E2A23B", color:"#1E1B16", fontFamily:"'Public Sans',system-ui,sans-serif" }}>
+              <Check size={12} strokeWidth={2.5} /> Save template
+            </button>
+          </div>
+        )}
       </div>
 
+      {isNarrowViewport ? (
+        <div className="flex-1 overflow-auto flex items-center justify-center px-6 py-10" style={dotGrid}>
+          <motion.div
+            className="bg-[#FCFAF3] border border-[#1E1B16]/20 rounded-[8px] max-w-[340px] px-7 py-8 text-center"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+          >
+            <div className="w-10 h-10 rounded-[6px] border border-[#DCD4C2] mx-auto mb-4 flex items-center justify-center">
+              <Monitor size={18} strokeWidth={1.5} className="text-[#6B6355]" />
+            </div>
+            <h3 className="text-[15px] font-semibold text-[#1E1B16] mb-2" style={F}>
+              Switch to a larger screen
+            </h3>
+            <p className="text-[12px] leading-relaxed" style={{ fontFamily: "'Public Sans', system-ui, sans-serif", color: "#6B6355" }}>
+              Template editing works best on a larger screen — please switch to a desktop or tablet to design certificates.
+            </p>
+            <button type="button" onClick={onBack}
+              className="mt-6 px-4 py-[7px] rounded-[6px] text-[12px] font-medium border border-[#DCD4C2] text-[#6B6355] hover:border-[#1E1B16]/30 hover:text-[#1E1B16] transition-colors"
+              style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
+              Back to Templates
+            </button>
+          </motion.div>
+        </div>
+      ) : (
       <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden lg:overflow-hidden overflow-auto">
 
         <div className="flex-1 min-h-[300px] overflow-auto flex items-start justify-center pt-10 pb-10"
@@ -1054,6 +1104,7 @@ function TemplateEditor({
 
         </div>
       </div>
+      )}
     </div>
   );
 }

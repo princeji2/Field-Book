@@ -1030,23 +1030,23 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
     <div className="flex items-center gap-2">
       <button
         type="button"
-        onClick={() => toast("Saved as draft")}
-        disabled={isGuest}
+        onClick={handleSaveDraft}
+        disabled={isGuest || saving}
         title={isGuest ? "Disabled in guest mode" : undefined}
         className="px-3.5 py-[7px] rounded-[6px] text-[12px] font-semibold border transition-colors hover:bg-[#FCFAF3] disabled:opacity-40 disabled:cursor-not-allowed"
         style={{ fontFamily: "'Public Sans', system-ui, sans-serif", borderColor: "rgba(30,27,22,0.25)", color: "#1E1B16" }}
       >
-        Save as Draft
+        {saving ? "Saving…" : "Save as Draft"}
       </button>
       <button
         type="button"
-        onClick={() => { toast.success("Event published successfully"); goBack(); }}
-        disabled={isGuest}
-        title={isGuest ? "Disabled in guest mode" : undefined}
+        onClick={handlePublish}
+        disabled={isGuest || saving}
+        title={isGuest ? "Disabled in guest mode" : "Submits to admin for approval before it goes live"}
         className="px-3.5 py-[7px] rounded-[6px] text-[12px] font-semibold transition-opacity hover:opacity-85 disabled:opacity-40 disabled:cursor-not-allowed"
         style={{ background: "#E2A23B", color: "#1E1B16", fontFamily: "'Public Sans', system-ui, sans-serif" }}
       >
-        Publish
+        {saving ? "Submitting…" : "Submit for Approval"}
       </button>
     </div>
   );
@@ -1123,7 +1123,24 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
                 })}
               </div>
 
-              {filteredEvents.length === 0 ? (
+              {eventsLoading ? (
+                /* ── Loading state ── */
+                <div className="flex items-center justify-center py-24">
+                  <RefreshCw size={18} strokeWidth={1.5} className="text-[#9C8E7E] animate-spin" />
+                </div>
+              ) : eventsError ? (
+                /* ── Error state ── */
+                <motion.div
+                  className="flex flex-col items-center py-24 text-center"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                >
+                  <p className="text-[13px] text-[#B5432E]" style={{ fontFamily: "'Public Sans', system-ui, sans-serif" }}>
+                    Couldn't load your events: {eventsError}
+                  </p>
+                </motion.div>
+              ) : filteredEvents.length === 0 ? (
                 /* ── Empty state ── */
                 <motion.div
                   className="flex flex-col items-center py-24 text-center"
@@ -1169,12 +1186,14 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
                     className="grid items-center px-6 py-3 border-b border-[#DCD4C2]"
                     style={{ gridTemplateColumns: "1fr 130px 80px 104px" }}
                   >
-                    {["Event", "Status", "Reg.", "Actions"].map(h => (
+                    {["Event", "Status", "Capacity", "Actions"].map(h => (
                       <span key={h} className="text-[8px] tracking-widest uppercase font-semibold" style={{ ...M, color: "#9C8E7E" }}>{h}</span>
                     ))}
                   </div>
 
-                  {filteredEvents.map((ev, i) => (
+                  {filteredEvents.map((ev, i) => {
+                    const displayStatus = capitalizeStatus(ev.status);
+                    return (
                     <motion.div
                       key={ev.id}
                       className={`grid items-center px-6 py-[14px] transition-colors hover:bg-[#F6F1E7] ${i < filteredEvents.length - 1 ? "border-b border-[#DCD4C2]" : ""}`}
@@ -1187,19 +1206,20 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
                       <div className="min-w-0 pr-4">
                         <p
                           className="text-[13px] text-[#1E1B16] truncate mb-[3px]"
-                          style={{ fontFamily: "'Public Sans', system-ui, sans-serif", fontWeight: ev.status === "Live" ? 600 : 400 }}
+                          style={{ fontFamily: "'Public Sans', system-ui, sans-serif", fontWeight: displayStatus === "Live" ? 600 : 400 }}
                         >
                           {ev.title}
                         </p>
                         <p className="text-[9px] truncate" style={{ ...M, color: "#9C8E7E" }}>
-                          {ev.date} · {ev.venue}
+                          {formatEventDate(ev.event_date)}{ev.venue ? ` · ${ev.venue}` : ""}
                         </p>
                       </div>
                       {/* Status badge */}
-                      <div><OrgStatusBadge status={ev.status} /></div>
-                      {/* Registration count */}
+                      <div><OrgStatusBadge status={displayStatus} /></div>
+                      {/* Capacity — no registrations table yet, so this is total
+                          capacity rather than a live registration count. */}
                       <span className="text-[11px] tabular-nums" style={{ ...M, color: "#9C8E7E" }}>
-                        {ev.status === "Draft" ? "—" : `${ev.attendees}/${ev.capacity}`}
+                        {ev.capacity}
                       </span>
                       {/* Quick actions */}
                       <div className="flex items-center gap-0.5">
@@ -1230,7 +1250,8 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
                         </button>
                       </div>
                     </motion.div>
-                  ))}
+                    );
+                  })}
                   </div>
                   </div>
                 </motion.div>
