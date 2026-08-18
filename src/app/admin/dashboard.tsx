@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Award, BarChart3, Check, ArrowRight, ChevronRight, CheckCircle2, AlertTriangle, Users, FileText, UserCheck, RefreshCw } from "lucide-react";
+import { Award, BarChart3, Check, ArrowRight, ChevronRight, CheckCircle2, AlertTriangle, Users, FileText, UserCheck, RefreshCw, XCircle, Calendar, Send } from "lucide-react";
 import { toast } from "sonner";
 import { F, M, dotGrid, type Screen, CertificateSeal, parseMetricNum, StatMetricNumber } from "../shared";
 import { AdminAppShell } from "./shell";
 import { signOutUser, type AuthedProfile } from "../../lib/auth";
 import { listApprovals, formatApprovalAge, type AdminApproval } from "../../lib/approvals";
+import { listPlatformActivity, formatActivityAge, type PlatformActivityItem, type ActivityCategory } from "../../lib/activity";
 
 // ─── Admin Dashboard ──────────────────────────────────────────────────────────
 //
@@ -26,14 +27,27 @@ const ADMIN_PLATFORM_METRICS = [
   { label:"Pending Approvals",  value:"4",     sub:"need your review",  color:"#8A5C00" },
 ];
 
-const ADMIN_ACTIVITY = [
-  { id:"aa1", icon:Award,       text:"142 certificates issued — Leadership Summit 2024",           time:"1h ago",     accent:"#2E6B4C" },
-  { id:"aa2", icon:UserCheck,   text:"Dr. Marcus Webb approved as Organizer — Student Affairs",    time:"2h ago",     accent:"#2E6B4C" },
-  { id:"aa3", icon:AlertTriangle, text:"Certificate delivery failed (2) — Design Thinking Workshop", time:"3h ago",   accent:"#B5432E" },
-  { id:"aa4", icon:Users,       text:"38 new student registrations across 4 events",               time:"5h ago",     accent:"#1E1B16" },
-  { id:"aa5", icon:FileText,    text:"Certificate template updated — Academic Lecture Series",      time:"Yesterday",  accent:"#1E1B16" },
-  { id:"aa6", icon:CheckCircle2, text:"Environmental Policy Symposium — approved and published",   time:"Yesterday",  accent:"#2E6B4C" },
-];
+// Icon per activity category — the Platform Activity panel below reads
+// real rows from `platform_activity` (src/lib/activity.ts) now, but the
+// icon choice is presentation-only, so it stays here in the UI layer
+// rather than being stored per-row in the database (mirrors how
+// TypeBadge/TYPE_COLORS in admin/approvals.tsx map approval `type`
+// strings to a badge appearance).
+const ACTIVITY_ICONS: Record<ActivityCategory, typeof Award> = {
+  certificates_issued: Award,
+  organizer_approved: UserCheck,
+  new_registrations: Users,
+  template_updated: FileText,
+  event_submitted: Send,
+  event_approved: CheckCircle2,
+  event_rejected: XCircle,
+  upcoming_reminder: Calendar,
+  certificate_delivery_failed: AlertTriangle,
+};
+
+function activityIcon(category: string): typeof Award {
+  return ACTIVITY_ICONS[category as ActivityCategory] ?? FileText;
+}
 
 // "Review Approvals" sub-label is filled in with the real pendingCount at
 // render time below (ql1.sub is a placeholder, replaced per-render) — the
@@ -125,6 +139,9 @@ export function AdminDashboard({
   const activityRef  = useRef<HTMLDivElement>(null);
   const [activityWidth, setActivityWidth] = useState(0);
   const [reviewHover, setReviewHover] = useState(false);
+  const [activity, setActivity] = useState<PlatformActivityItem[]>([]);
+  const [loadingActivity, setLoadingActivity] = useState(!isGuest);
+  const [activityError, setActivityError] = useState<string | null>(null);
 
   const fetchPendingApprovals = useCallback(async () => {
     setLoadingApprovals(true);
@@ -149,6 +166,26 @@ export function AdminDashboard({
     if (isGuest) { setLoadingApprovals(false); return; }
     void fetchPendingApprovals();
   }, [isGuest, fetchPendingApprovals]);
+
+  const fetchActivity = useCallback(async () => {
+    setLoadingActivity(true);
+    setActivityError(null);
+    const result = await listPlatformActivity(6);
+    if (result.status === "error") {
+      setActivityError(result.message);
+      setLoadingActivity(false);
+      return;
+    }
+    setActivity(result.items);
+    setLoadingActivity(false);
+  }, []);
+
+  useEffect(() => {
+    // Same platform_activity_select_admin RLS shape as approvals — guest
+    // mode would just get zero rows, so skip the fetch entirely.
+    if (isGuest) { setLoadingActivity(false); return; }
+    void fetchActivity();
+  }, [isGuest, fetchActivity]);
 
   useEffect(() => {
     if (!activityRef.current) return;
@@ -362,35 +399,63 @@ export function AdminDashboard({
               </div>
               {/* List with seismograph trace */}
               <div className="relative">
-                {activityWidth > 0 && (
-                  <SeismographTrace
-                    width={activityWidth}
-                    height={ADMIN_ACTIVITY.length * 56}
-                    rowCount={ADMIN_ACTIVITY.length}
-                    rowDelay={0.14}
-                  />
+                {loadingActivity && (
+                  <div className="flex items-center justify-center py-10">
+                    <RefreshCw size={16} strokeWidth={1.5} className="text-[#9C8E7E] animate-spin" />
+                  </div>
                 )}
-                <div className="divide-y divide-[#DCD4C2] relative">
-                  {ADMIN_ACTIVITY.map((item, i) => {
-                    const Icon = item.icon;
-                    return (
-                      <motion.div key={item.id}
-                        className="px-6 py-3.5 flex items-start gap-4"
-                        initial={{ opacity:0 }} animate={{ opacity:1 }}
-                        transition={{ duration:0.15, delay:0.14 + i*0.04 }}>
-                        <div className="w-7 h-7 rounded-[6px] flex items-center justify-center flex-shrink-0 mt-0.5"
-                          style={{ background:`${item.accent}14`, border:`1px solid ${item.accent}28` }}>
-                          <Icon size={12} strokeWidth={1.75} style={{ color:item.accent }} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[12px] text-[#1E1B16] leading-snug"
-                            style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>{item.text}</div>
-                        </div>
-                        <span className="text-[9px] text-[#9C8E7E] flex-shrink-0 mt-0.5" style={M}>{item.time}</span>
-                      </motion.div>
-                    );
-                  })}
-                </div>
+                {!loadingActivity && activityError && (
+                  <div className="flex flex-col items-center justify-center py-10 gap-2">
+                    <span className="text-[11px] text-[#B5432E]" style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>
+                      Couldn't load activity: {activityError}
+                    </span>
+                    <button type="button" onClick={() => void fetchActivity()}
+                      className="flex items-center gap-1 px-2 py-[3px] rounded-[5px] text-[10px] font-semibold border border-[#DCD4C2] text-[#1E1B16] hover:bg-[#F6F1E7] transition-colors"
+                      style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>
+                      <RefreshCw size={10} strokeWidth={1.75} /> Retry
+                    </button>
+                  </div>
+                )}
+                {!loadingActivity && !activityError && activity.length === 0 && (
+                  <div className="flex items-center justify-center py-10">
+                    <span className="text-[11px] text-[#9C8E7E]" style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>
+                      No activity yet.
+                    </span>
+                  </div>
+                )}
+                {!loadingActivity && !activityError && activity.length > 0 && (
+                  <>
+                    {activityWidth > 0 && (
+                      <SeismographTrace
+                        width={activityWidth}
+                        height={activity.length * 56}
+                        rowCount={activity.length}
+                        rowDelay={0.14}
+                      />
+                    )}
+                    <div className="divide-y divide-[#DCD4C2] relative">
+                      {activity.map((item, i) => {
+                        const Icon = activityIcon(item.category);
+                        return (
+                          <motion.div key={item.id}
+                            className="px-6 py-3.5 flex items-start gap-4"
+                            initial={{ opacity:0 }} animate={{ opacity:1 }}
+                            transition={{ duration:0.15, delay:0.14 + i*0.04 }}>
+                            <div className="w-7 h-7 rounded-[6px] flex items-center justify-center flex-shrink-0 mt-0.5"
+                              style={{ background:`${item.accentColor}14`, border:`1px solid ${item.accentColor}28` }}>
+                              <Icon size={12} strokeWidth={1.75} style={{ color:item.accentColor }} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[12px] text-[#1E1B16] leading-snug"
+                                style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>{item.message}</div>
+                            </div>
+                            <span className="text-[9px] text-[#9C8E7E] flex-shrink-0 mt-0.5" style={M}>{formatActivityAge(item.createdAt)}</span>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
             </motion.div>
 

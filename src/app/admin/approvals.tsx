@@ -107,7 +107,7 @@ export function ApprovalsScreen({ onNavigate, onPendingChange, isGuest, profile 
     setWipingId(a.id);
     setWipingAction("approve");
 
-    const result = await approveEventApproval(a.id, a.eventId, profile.id);
+    const result = await approveEventApproval(a.id, a.eventId, profile.id, a.eventTitle);
     if (result.status === "error") {
       setWipingId(null);
       setWipingAction(null);
@@ -142,7 +142,7 @@ export function ApprovalsScreen({ onNavigate, onPendingChange, isGuest, profile 
     setWipingId(a.id);
     setWipingAction("reject");
 
-    const result = await rejectEventApproval(a.id, profile.id, rejectReason);
+    const result = await rejectEventApproval(a.id, profile.id, rejectReason, a.eventId, a.eventTitle);
     if (result.status === "error") {
       setWipingId(null);
       setWipingAction(null);

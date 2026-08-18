@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient";
 import type { AppRole } from "./auth";
 import type { EventStatus, LocationType } from "./events";
+import { logActivity } from "./activity";
 
 // Real writes against the `approvals` table for the organizer-submits /
 // admin-approves publishing flow. RLS (approvals_insert_own_organizer)
@@ -192,6 +193,7 @@ export async function approveEventApproval(
   approvalId: string,
   eventId: string,
   reviewerId: string,
+  eventTitle?: string,
 ): Promise<ResolveApprovalResult> {
   const { error: eventError } = await supabase
     .from("events")
@@ -216,6 +218,17 @@ export async function approveEventApproval(
     };
   }
 
+  // Best-effort activity log entry — the approval itself already
+  // succeeded above, so a failure here shouldn't be surfaced as an error
+  // to the admin (see logActivity()'s own doc comment).
+  void logActivity({
+    category: "event_approved",
+    message: `${eventTitle ?? "An event"} — approved and published`,
+    accentColor: "#2E6B4C",
+    eventId,
+    actorId: reviewerId,
+  });
+
   return { status: "success" };
 }
 
@@ -229,6 +242,8 @@ export async function rejectEventApproval(
   approvalId: string,
   reviewerId: string,
   rejectionReason: string | null,
+  eventId?: string,
+  eventTitle?: string,
 ): Promise<ResolveApprovalResult> {
   const { error } = await supabase
     .from("approvals")
@@ -241,6 +256,15 @@ export async function rejectEventApproval(
     .eq("id", approvalId);
 
   if (error) return { status: "error", message: error.message };
+
+  void logActivity({
+    category: "event_rejected",
+    message: `${eventTitle ?? "An event"} — rejected`,
+    accentColor: "#B5432E",
+    eventId: eventId ?? null,
+    actorId: reviewerId,
+  });
+
   return { status: "success" };
 }
 
