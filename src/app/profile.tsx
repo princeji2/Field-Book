@@ -343,17 +343,56 @@ export function ProfileScreen({
     }
 
     setIsUploadingAvatar(true);
-    const path = buildObjectPath(userId, file);
-    const result = await uploadToBucket("avatars", path, file);
-    setIsUploadingAvatar(false);
+    try {
+      const path = buildObjectPath(userId, file);
+      const result = await uploadToBucket("avatars", path, file);
 
+      if (result.status === "error") {
+        setUploadError(result.message);
+        toast.error("Couldn't upload photo", { description: result.message });
+        return;
+      }
+
+      setAvatarUrl(result.publicUrl);
+
+      // Unlike the rest of this form, the avatar persists to
+      // profiles.avatar_url immediately rather than waiting for "Save
+      // Changes" — so it survives a refresh/navigation even if the user
+      // never hits Save.
+      const saveResult = await updateAvatarUrl(userId, result.publicUrl);
+      if (saveResult.status === "error") {
+        // The file itself uploaded fine; only the profile write failed.
+        // Mark the form dirty so "Save Changes" (which also calls
+        // updateAvatarUrl) offers a retry path.
+        toast.error("Photo uploaded, but couldn't save to your profile", { description: saveResult.message });
+        markDirty();
+        return;
+      }
+
+      toast.success("Profile photo updated");
+    } catch {
+      setUploadError("Failed to upload photo. Please try again.");
+      toast.error("Couldn't upload photo", { description: "Please try again." });
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  }
+
+  async function handleRemovePhoto() {
+    setAvatarUrl(null);
+
+    if (!userId) return;
+
+    // Mirrors the upload path in processAvatarFile: persist immediately to
+    // profiles.avatar_url rather than waiting for "Save Changes".
+    const result = await updateAvatarUrl(userId, null);
     if (result.status === "error") {
-      setUploadError(result.message);
+      toast.error("Couldn't remove photo", { description: result.message });
+      markDirty();
       return;
     }
 
-    setAvatarUrl(result.publicUrl);
-    markDirty();
+    toast.success("Profile photo removed");
   }
 
   const inputCls = "w-full px-3 py-[9px] text-[12px] bg-[#F6F1E7] border border-[#DCD4C2] rounded-[6px] text-[#1E1B16] placeholder:text-[#9C8E7E] focus:outline-none focus:border-[#1E1B16] transition-colors";
@@ -475,7 +514,7 @@ export function ProfileScreen({
             )}
             {avatarUrl && (
               <button type="button"
-                onClick={() => { setAvatarUrl(null); markDirty(); }}
+                onClick={() => void handleRemovePhoto()}
                 className="flex items-center gap-1.5 text-[11px] transition-opacity hover:opacity-70"
                 style={{ ...PS, color: "#B5432E" }}>
                 <Trash2 size={11} strokeWidth={1.75} /> Remove photo
