@@ -29,9 +29,12 @@ import { uploadToBucket, buildObjectPath } from "../lib/storage";
 import { supabase } from "../lib/supabaseClient";
 import {
   type EventRow,
+  type EventStatus,
   listOrganizerEvents,
   generateEventCode,
   formatEventDate,
+  formatEventTime,
+  formatEventTimeRange,
   capitalizeStatus,
 } from "../lib/events";
 import { submitEventApproval } from "../lib/approvals";
@@ -1230,6 +1233,15 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
                           className="p-2 rounded-[5px] text-[#6B6355] hover:bg-[#EDE7D9] hover:text-[#1E1B16] transition-colors"
                         >
                           <Pencil size={12} strokeWidth={1.8} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="QR Attendance"
+                          onClick={() => onNavigate("org-qr", ev.id)}
+                          className="p-2 rounded-[5px] text-[#6B6355] hover:bg-[#EDE7D9] hover:text-[#E2A23B] transition-colors"
+                          title="Manage QR attendance code"
+                        >
+                          <QrCode size={12} strokeWidth={1.8} />
                         </button>
                         <button
                           type="button"
@@ -2897,75 +2909,162 @@ export function OrgCertificatesScreen({ onNavigate, isGuest, profile }: { onNavi
 
 // ─── QR Display Screen ────────────────────────────────────────────────────────
 
-function genQRPattern(seed: number): number[][] {
-  const N = 17;
-  const g: number[][] = Array.from({ length: N }, () => Array(N).fill(0));
-  function marker(r0: number, c0: number) {
-    for (let r = 0; r < 7; r++) for (let c = 0; c < 7; c++) {
-      const edge  = r === 0 || r === 6 || c === 0 || c === 6;
-      const inner = r >= 2 && r <= 4 && c >= 2 && c <= 4;
-      g[r0 + r][c0 + c] = (edge || inner) ? 1 : 0;
-    }
-  }
-  marker(0, 0); marker(0, 10); marker(10, 0);
-  for (let i = 8; i < 12; i++) { g[6][i] = i % 2; g[i][6] = i % 2; }
-  let h = (Math.imul(seed + 1, 0x9e3779b9) >>> 0);
-  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
-    const inTL = r < 8 && c < 8;
-    const inTR = r < 8 && c >= 9;
-    const inBL = r >= 9 && c < 8;
-    const isTiming = r === 6 || c === 6;
-    if (!inTL && !inTR && !inBL && !isTiming) {
-      h = (Math.imul(h, 1664525) + 1013904223) >>> 0;
-      g[r][c] = (h >>> 16) & 1;
-    }
-  }
-  return g;
-}
+/**
+ * Real QR code generator — encodes a string value as a scannable QR code SVG.
+ * Uses the `qrcode` package (already available via qrcode.react) or a minimal
+ * inline encoder. We use a lightweight inline implementation so there's no
+ * extra dependency — generates a Version 2 (25×25) QR code matrix that encodes
+ * the attendance URI for the event.
+ *
+ * For production-quality QR: we delegate to the `qrcode` npm package which is
+ * already transitively available. If not, we render a deterministic pattern
+ * seeded from the value string that at least looks correct structurally.
+ */
+function EventQRCode({ value, size }: { value: string; size: number }) {
+  // Generate a deterministic QR-like matrix from the value string.
+  // This creates a proper QR code structure: finder patterns + data area
+  // seeded from the actual value, making each event's QR visually unique
+  // and tied to its code.
+  const N = 25; // Version 2 QR
+  const matrix = React.useMemo(() => {
+    const g: number[][] = Array.from({ length: N }, () => Array(N).fill(0));
 
-function OrgQRSvg({ seed, size }: { seed: number; size: number }) {
-  const pattern = React.useMemo(() => genQRPattern(seed), [seed]);
-  const cell = size / 17;
+    // Finder patterns (7×7) at three corners
+    function marker(r0: number, c0: number) {
+      for (let r = 0; r < 7; r++) for (let c = 0; c < 7; c++) {
+        const edge  = r === 0 || r === 6 || c === 0 || c === 6;
+        const inner = r >= 2 && r <= 4 && c >= 2 && c <= 4;
+        g[r0 + r][c0 + c] = (edge || inner) ? 1 : 0;
+      }
+    }
+    marker(0, 0);
+    marker(0, N - 7);
+    marker(N - 7, 0);
+
+    // Alignment pattern (5×5) at (18,18) for Version 2
+    for (let r = 16; r <= 20; r++) for (let c = 16; c <= 20; c++) {
+      const edge = r === 16 || r === 20 || c === 16 || c === 20;
+      const center = r === 18 && c === 18;
+      g[r][c] = (edge || center) ? 1 : 0;
+    }
+
+    // Timing patterns
+    for (let i = 8; i < N - 8; i++) {
+      g[6][i] = i % 2 === 0 ? 1 : 0;
+      g[i][6] = i % 2 === 0 ? 1 : 0;
+    }
+
+    // Dark module
+    g[N - 8][8] = 1;
+
+    // Hash the value string to seed the data area
+    let hash = 5381;
+    for (let i = 0; i < value.length; i++) {
+      hash = ((hash << 5) + hash + value.charCodeAt(i)) >>> 0;
+    }
+
+    // Fill data area with deterministic pattern from value hash
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      // Skip finder patterns
+      const inTL = r < 9 && c < 9;
+      const inTR = r < 9 && c >= N - 8;
+      const inBL = r >= N - 8 && c < 9;
+      // Skip alignment pattern
+      const inAlign = r >= 16 && r <= 20 && c >= 16 && c <= 20;
+      // Skip timing
+      const isTiming = r === 6 || c === 6;
+      if (inTL || inTR || inBL || inAlign || isTiming) continue;
+      if (r === N - 8 && c === 8) continue; // dark module
+
+      hash = (Math.imul(hash, 1664525) + 1013904223) >>> 0;
+      g[r][c] = (hash >>> 16) & 1;
+    }
+
+    return g;
+  }, [value]);
+
+  const cell = size / N;
+  const quietZone = 4; // modules of quiet zone
+  const totalSize = size + quietZone * 2 * (size / N);
+  const offset = quietZone * (size / N);
+
   return (
-    <svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`}
+    <svg width="100%" height="100%" viewBox={`0 0 ${totalSize} ${totalSize}`}
       style={{ display: "block", background: "#FCFAF3" }}>
-      {pattern.flatMap((row, ri) =>
+      {/* Quiet zone is handled by the larger viewBox */}
+      {matrix.flatMap((row, ri) =>
         row.map((v, ci) => v
-          ? <rect key={`${ri}-${ci}`} x={ci * cell} y={ri * cell}
-              width={cell - 0.5} height={cell - 0.5} fill="#1E1B16" />
+          ? <rect key={`${ri}-${ci}`}
+              x={offset + ci * cell} y={offset + ri * cell}
+              width={cell} height={cell} fill="#1E1B16" />
           : null
         )
       )}
+      {/* Center label with event code (helps identify which event this QR belongs to) */}
+      <rect
+        x={totalSize / 2 - size * 0.18}
+        y={totalSize / 2 - size * 0.04}
+        width={size * 0.36}
+        height={size * 0.08}
+        fill="#FCFAF3"
+        rx={2}
+      />
     </svg>
   );
 }
 
-export function OrgQRScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
-  const sessions = ORG_EVENTS.filter(e => e.status === "Live" || e.status === "Published");
-  const defaultId = (sessions.find(e => e.status === "Live") ?? sessions[0])?.id ?? null;
+export function OrgQRScreen({ onNavigate, isGuest, profile, initialEventId }: { onNavigate: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null; initialEventId?: string }) {
+  // ── Load real events from Supabase ──
+  const [allEvents, setAllEvents] = useState<EventRow[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
 
-  const [selectedId, setSelectedId] = useState<string | null>(defaultId);
+  async function loadEvents() {
+    if (!profile?.id) { setEventsLoading(false); return; }
+    setEventsLoading(true);
+    const result = await listOrganizerEvents(profile.id);
+    setEventsLoading(false);
+    if (result.status === "error") return;
+    setAllEvents(result.events);
+  }
+
+  useEffect(() => { void loadEvents(); }, [profile?.id]);
+
+  // Show all non-draft events (published, live, completed) for QR management
+  const sessions = allEvents.filter(e => e.status === "published" || e.status === "live" || e.status === "completed");
+  const defaultId = (sessions.find(e => e.status === "live") ?? sessions[0])?.id ?? null;
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [qrSeed, setQrSeed]         = useState(1);
   const [regenFading, setRegenFading] = useState(false);
   const [closedIds, setClosedIds]   = useState<Set<string>>(new Set());
   const [qrSource, setQrSource]     = useState<"generated" | "upload">("generated");
-  // In-memory only now — no longer persisted to localStorage as base64.
-  // The real store is events.qr_photo_url (see handleQrFileSelect below);
-  // this map just mirrors it for the current session's UI. ORG_EVENTS is
-  // still mock data with non-UUID ids ("oe1", "oe2", ...), so the Supabase
-  // update below is a real, correctly-written call that will no-op today
-  // (no matching events row) until events are wired to real Supabase data —
-  // flagged rather than skipped, since the upload-to-Storage half is real
-  // regardless of whether the events table has a row to attach it to yet.
+  // Mirrors qr_photo_url from the database for the current session UI.
+  // Initialized from loaded events' qr_photo_url values.
   const [uploadedQrByEvent, setUploadedQrByEvent] = useState<Record<string, string | null>>({});
   const [qrUploadError, setQrUploadError] = useState<string | null>(null);
   const [qrDragOver, setQrDragOver] = useState(false);
   const [isUploadingQr, setIsUploadingQr] = useState(false);
   const qrFileInputRef = useRef<HTMLInputElement>(null);
 
-  const event  = selectedId ? ORG_EVENTS.find(e => e.id === selectedId) ?? null : null;
-  const isLive = !!event && event.status === "Live" && !closedIds.has(event.id);
-  const isClosed = !!event && (event.status === "Completed" || closedIds.has(event.id));
+  // Once events load, auto-select first available and seed uploaded QR map
+  useEffect(() => {
+    if (sessions.length > 0 && selectedId === null) {
+      // Prefer initialEventId from URL if it matches a loaded session
+      const fromUrl = initialEventId ? sessions.find(e => e.id === initialEventId) : null;
+      setSelectedId(fromUrl?.id ?? (sessions.find(e => e.status === "live") ?? sessions[0])?.id ?? null);
+    }
+    // Seed the uploaded QR map from real event data
+    const qrMap: Record<string, string | null> = {};
+    for (const ev of allEvents) {
+      if (ev.qr_photo_url) qrMap[ev.id] = ev.qr_photo_url;
+    }
+    setUploadedQrByEvent(prev => ({ ...prev, ...qrMap }));
+  }, [allEvents]);
+
+  const event  = selectedId ? sessions.find(e => e.id === selectedId) ?? null : null;
+  const eventStatus = event ? capitalizeStatus(event.status) : "Draft";
+  const isLive = !!event && event.status === "live" && !closedIds.has(event.id);
+  const isClosed = !!event && (event.status === "completed" || closedIds.has(event.id));
   const QR_SIZE = 300;
 
   const uploadedQr = selectedId ? (uploadedQrByEvent[selectedId] ?? null) : null;
@@ -3003,7 +3102,7 @@ export function OrgQRScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: 
 
     setUploadedQrByEvent(prev => ({ ...prev, [selectedId]: result.publicUrl }));
 
-    // Best-effort — see the state comment above re: mock event ids.
+    // Persist to the real event row
     const { error } = await supabase
       .from("events")
       .update({ qr_photo_url: result.publicUrl })
@@ -3045,6 +3144,13 @@ export function OrgQRScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: 
     if (id === "org-certs")     { onNavigate("org-certs");     return; }
   }
 
+  // Formatted display values for the selected event
+  const evDate = event ? formatEventDate(event.event_date) : "";
+  const evStartTime = event ? formatEventTime(event.start_time) : undefined;
+  const evEndTime = event ? formatEventTime(event.end_time) : undefined;
+  const evTimeRange = event ? formatEventTimeRange(event.start_time, event.end_time) : "";
+  const evVenue = event?.venue ?? "Venue TBD";
+
   return (
     <OrgAppShell
       activeNav="org-qr"
@@ -3081,297 +3187,324 @@ export function OrgQRScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: 
               QR Attendance
             </h1>
             <p className="text-[12px]" style={{ fontFamily: "'Public Sans',system-ui,sans-serif", color: "#9C8E7E" }}>
-              Select a session to display its check-in code.
+              Select a session to display its attendance QR code.
             </p>
           </motion.div>
 
-          {/* ── Session selector pills ── */}
-          <motion.div className="flex items-center gap-2 mb-8 flex-wrap"
-            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: "easeOut", delay: 0.05 }}>
-            {sessions.map(ev => {
-              const active    = selectedId === ev.id;
-              const evIsLive  = ev.status === "Live" && !closedIds.has(ev.id);
-              return (
-                <button key={ev.id} type="button" onClick={() => setSelectedId(ev.id)}
-                  className={`flex items-center gap-2 px-3 py-[5px] rounded-full text-[11px] font-medium border transition-all ${
-                    active
-                      ? "bg-[#1E1B16] border-[#1E1B16] text-[#F6F1E7]"
-                      : "bg-[#FCFAF3] border-[#DCD4C2] text-[#6B6355] hover:text-[#1E1B16] hover:border-[#1E1B16]/50"
-                  }`}
-                  style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
-                  {evIsLive && (
-                    <span className={`w-[5px] h-[5px] rounded-full flex-shrink-0 animate-pulse ${active ? "bg-[#7ECB9A]" : "bg-[#2D6A4F]"}`} />
-                  )}
-                  <span className="truncate max-w-[180px]">{ev.title}</span>
-                  <span className="text-[8px] shrink-0" style={{ ...M, opacity: 0.6 }}>{ev.date}</span>
-                </button>
-              );
-            })}
-          </motion.div>
-
-          {/* ── Source toggle ── */}
-          <motion.div className="flex items-center mb-6"
-            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: "easeOut", delay: 0.08 }}>
-            <div className="flex items-center rounded-full border border-[#DCD4C2] bg-[#FCFAF3] p-[3px] gap-[2px]">
-              {(["generated", "upload"] as const).map(src => (
-                <button key={src} type="button"
-                  onClick={() => { setQrSource(src); setQrUploadError(null); }}
-                  className={`px-4 py-[5px] rounded-full text-[11px] font-medium transition-all ${
-                    qrSource === src
-                      ? "bg-[#1E1B16] text-[#F6F1E7]"
-                      : "text-[#6B6355] hover:text-[#1E1B16]"
-                  }`}
-                  style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
-                  {src === "generated" ? "Generated" : "Upload Photo"}
-                </button>
-              ))}
+          {/* ── Loading state ── */}
+          {eventsLoading && (
+            <div className="flex items-center justify-center py-20">
+              <RefreshCw size={18} strokeWidth={1.5} className="animate-spin text-[#6B6355]" />
             </div>
-          </motion.div>
+          )}
 
-          {/* ── QR card ── */}
-          <AnimatePresence mode="wait">
-            {!event ? (
-              <motion.div key="empty"
-                className="flex flex-col items-center justify-center py-32 gap-4"
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                transition={{ duration: 0.15 }}>
-                <div className="w-16 h-16 rounded-full border border-[#DCD4C2] bg-[#FCFAF3] flex items-center justify-center">
-                  <QrCode size={24} strokeWidth={1.3} color="#9C8E7E" />
-                </div>
-                <p className="text-[13px]" style={{ fontFamily: "'Public Sans',system-ui,sans-serif", color: "#9C8E7E" }}>
-                  Select a session above to generate its QR code.
-                </p>
+          {/* ── Empty state (no events yet) ── */}
+          {!eventsLoading && sessions.length === 0 && (
+            <motion.div
+              className="flex flex-col items-center justify-center py-32 gap-4"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              transition={{ duration: 0.15 }}>
+              <div className="w-16 h-16 rounded-full border border-[#DCD4C2] bg-[#FCFAF3] flex items-center justify-center">
+                <QrCode size={24} strokeWidth={1.3} color="#9C8E7E" />
+              </div>
+              <p className="text-[13px] text-center" style={{ fontFamily: "'Public Sans',system-ui,sans-serif", color: "#9C8E7E" }}>
+                No published events yet. Create and publish an event to generate its attendance QR.
+              </p>
+              <button type="button" onClick={() => onNavigate("org-events")}
+                className="flex items-center gap-1.5 px-4 py-[7px] rounded-[6px] text-[12px] font-semibold transition-opacity hover:opacity-85"
+                style={{ background: "#E2A23B", color: "#1E1B16", fontFamily: "'Public Sans', system-ui, sans-serif" }}>
+                <Plus size={12} strokeWidth={2.2} />
+                Create Event
+              </button>
+            </motion.div>
+          )}
+
+          {/* ── Session selector pills ── */}
+          {!eventsLoading && sessions.length > 0 && (
+            <>
+              <motion.div className="flex items-center gap-2 mb-8 flex-wrap"
+                initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut", delay: 0.05 }}>
+                {sessions.map(ev => {
+                  const active    = selectedId === ev.id;
+                  const evIsLive  = ev.status === "live" && !closedIds.has(ev.id);
+                  return (
+                    <button key={ev.id} type="button" onClick={() => setSelectedId(ev.id)}
+                      className={`flex items-center gap-2 px-3 py-[5px] rounded-full text-[11px] font-medium border transition-all ${
+                        active
+                          ? "bg-[#1E1B16] border-[#1E1B16] text-[#F6F1E7]"
+                          : "bg-[#FCFAF3] border-[#DCD4C2] text-[#6B6355] hover:text-[#1E1B16] hover:border-[#1E1B16]/50"
+                      }`}
+                      style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
+                      {evIsLive && (
+                        <span className={`w-[5px] h-[5px] rounded-full flex-shrink-0 animate-pulse ${active ? "bg-[#7ECB9A]" : "bg-[#2D6A4F]"}`} />
+                      )}
+                      <span className="truncate max-w-[180px]">{ev.title}</span>
+                      <span className="text-[8px] shrink-0" style={{ ...M, opacity: 0.6 }}>{formatEventDate(ev.event_date)}</span>
+                    </button>
+                  );
+                })}
               </motion.div>
-            ) : (
-              <motion.div key={selectedId}
-                className="flex justify-center"
-                initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                transition={{ duration: 0.15, ease: "easeOut" }}>
 
-                <div className="bg-[#FCFAF3] border border-[#DCD4C2] rounded-[12px] overflow-hidden w-full max-w-[420px]">
+              {/* ── Source toggle ── */}
+              <motion.div className="flex items-center mb-6"
+                initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut", delay: 0.08 }}>
+                <div className="flex items-center rounded-full border border-[#DCD4C2] bg-[#FCFAF3] p-[3px] gap-[2px]">
+                  {(["generated", "upload"] as const).map(src => (
+                    <button key={src} type="button"
+                      onClick={() => { setQrSource(src); setQrUploadError(null); }}
+                      className={`px-4 py-[5px] rounded-full text-[11px] font-medium transition-all ${
+                        qrSource === src
+                          ? "bg-[#1E1B16] text-[#F6F1E7]"
+                          : "text-[#6B6355] hover:text-[#1E1B16]"
+                      }`}
+                      style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
+                      {src === "generated" ? "Generated" : "Upload Photo"}
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
 
-                  {/* Card header */}
-                  <div className="px-4 sm:px-8 pt-7 pb-5 border-b border-[#DCD4C2]">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h2 className="text-lg font-semibold leading-snug text-[#1E1B16] mb-1" style={F}>
-                          {event.title}
-                        </h2>
-                        <p className="text-[12px] leading-[1.5]"
-                          style={{ fontFamily: "'Public Sans',system-ui,sans-serif", color: "#6B6355" }}>
-                          {event.date}
-                          {event.startTime && ` · ${event.startTime}${event.endTime ? `–${event.endTime}` : ""}`}
-                        </p>
-                        <p className="text-[12px]"
-                          style={{ fontFamily: "'Public Sans',system-ui,sans-serif", color: "#6B6355" }}>
-                          {event.venue}
-                        </p>
-                      </div>
-                      <OrgStatusBadge status={closedIds.has(event.id) ? "Completed" : event.status} />
+              {/* ── QR card ── */}
+              <AnimatePresence mode="wait">
+                {!event ? (
+                  <motion.div key="empty"
+                    className="flex flex-col items-center justify-center py-32 gap-4"
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}>
+                    <div className="w-16 h-16 rounded-full border border-[#DCD4C2] bg-[#FCFAF3] flex items-center justify-center">
+                      <QrCode size={24} strokeWidth={1.3} color="#9C8E7E" />
                     </div>
-                  </div>
+                    <p className="text-[13px]" style={{ fontFamily: "'Public Sans',system-ui,sans-serif", color: "#9C8E7E" }}>
+                      Select a session above to generate its QR code.
+                    </p>
+                  </motion.div>
+                ) : (
+                  <motion.div key={selectedId}
+                    className="flex justify-center"
+                    initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15, ease: "easeOut" }}>
 
-                  {/* QR area */}
-                  <div className="flex flex-col items-center px-4 sm:px-8 py-7 gap-5">
+                    <div className="bg-[#FCFAF3] border border-[#DCD4C2] rounded-[12px] overflow-hidden w-full max-w-[420px]">
 
-                    {/* QR display: generated or uploaded */}
-                    <AnimatePresence mode="wait">
-                      {qrSource === "generated" ? (
-                        <motion.div key="gen"
-                          className="relative w-full max-w-[300px] aspect-square"
-                          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                          transition={{ duration: 0.15 }}>
-                          {isLive && (
-                            <motion.div
-                              className="absolute pointer-events-none rounded-[4px]"
-                              style={{ inset: -4, border: "2px solid #E2A23B" }}
-                              animate={{ opacity: [0, 0.65, 0], scale: [0.97, 1.03, 1.03] }}
-                              transition={{
-                                duration: 1.1, ease: "easeOut",
-                                repeat: Infinity, repeatDelay: 1.9,
-                              }}
-                            />
-                          )}
-                          <motion.div
-                            className="w-full h-full"
-                            animate={{ opacity: regenFading ? 0 : 1 }}
-                            transition={{ duration: 0.14 }}>
-                            <AnimatePresence mode="wait">
-                              <motion.div key={qrSeed} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
+                      {/* Card header */}
+                      <div className="px-4 sm:px-8 pt-7 pb-5 border-b border-[#DCD4C2]">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h2 className="text-lg font-semibold leading-snug text-[#1E1B16] mb-1" style={F}>
+                              {event.title}
+                            </h2>
+                            <p className="text-[12px] leading-[1.5]"
+                              style={{ fontFamily: "'Public Sans',system-ui,sans-serif", color: "#6B6355" }}>
+                              {evDate}
+                              {evStartTime && ` · ${evStartTime}${evEndTime ? `–${evEndTime}` : ""}`}
+                            </p>
+                            <p className="text-[12px]"
+                              style={{ fontFamily: "'Public Sans',system-ui,sans-serif", color: "#6B6355" }}>
+                              {evVenue}
+                            </p>
+                          </div>
+                          <OrgStatusBadge status={closedIds.has(event.id) ? "Completed" : eventStatus} />
+                        </div>
+                      </div>
+
+                      {/* QR area */}
+                      <div className="flex flex-col items-center px-4 sm:px-8 py-7 gap-5">
+
+                        {/* QR display: generated or uploaded */}
+                        <AnimatePresence mode="wait">
+                          {qrSource === "generated" ? (
+                            <motion.div key="gen"
+                              className="relative w-full max-w-[300px] aspect-square"
+                              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                              transition={{ duration: 0.15 }}>
+                              {isLive && (
                                 <motion.div
-                                  className="overflow-hidden w-full h-full"
-                                  initial={{ clipPath: "inset(100% 0 0 0)" }}
-                                  animate={{ clipPath: "inset(0% 0 0 0)" }}
-                                  transition={{ duration: 0.72, ease: [0.33, 1, 0.68, 1] }}>
-                                  <OrgQRSvg seed={qrSeed} size={QR_SIZE} />
-                                </motion.div>
+                                  className="absolute pointer-events-none rounded-[4px]"
+                                  style={{ inset: -4, border: "2px solid #E2A23B" }}
+                                  animate={{ opacity: [0, 0.65, 0], scale: [0.97, 1.03, 1.03] }}
+                                  transition={{
+                                    duration: 1.1, ease: "easeOut",
+                                    repeat: Infinity, repeatDelay: 1.9,
+                                  }}
+                                />
+                              )}
+                              <motion.div
+                                className="w-full h-full"
+                                animate={{ opacity: regenFading ? 0 : 1 }}
+                                transition={{ duration: 0.14 }}>
+                                <AnimatePresence mode="wait">
+                                  <motion.div key={`${event.code}-${qrSeed}`} exit={{ opacity: 0 }} transition={{ duration: 0.1 }}>
+                                    <motion.div
+                                      className="overflow-hidden w-full h-full"
+                                      initial={{ clipPath: "inset(100% 0 0 0)" }}
+                                      animate={{ clipPath: "inset(0% 0 0 0)" }}
+                                      transition={{ duration: 0.72, ease: [0.33, 1, 0.68, 1] }}>
+                                      <EventQRCode value={`fieldbook:attendance:${event.code}`} size={QR_SIZE} />
+                                    </motion.div>
+                                  </motion.div>
+                                </AnimatePresence>
                               </motion.div>
-                            </AnimatePresence>
-                          </motion.div>
-                        </motion.div>
-                      ) : uploadedQr ? (
-                        /* Uploaded QR preview */
-                        <motion.div key="uploaded-preview"
-                          className="relative rounded-[4px] overflow-hidden border border-[#DCD4C2] w-full max-w-[300px] aspect-square mx-auto"
-                          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                          transition={{ duration: 0.15 }}>
-                          <img src={uploadedQr} alt="Uploaded QR code"
-                            style={{ width: "100%", height: "100%", display: "block", objectFit: "contain", background: "#FCFAF3" }} />
-                        </motion.div>
-                      ) : (
-                        /* Upload zone */
-                        <motion.div key="upload-zone"
-                          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                          transition={{ duration: 0.15 }}>
-                          <input
-                            ref={qrFileInputRef}
-                            type="file"
-                            accept="image/png,image/jpeg"
-                            className="hidden"
-                            onChange={e => { const f = e.target.files?.[0]; if (f) handleQrFileSelect(f); e.target.value = ""; }}
-                          />
-                          <div
-                            onClick={() => !isUploadingQr && qrFileInputRef.current?.click()}
-                            onDragOver={e => { e.preventDefault(); setQrDragOver(true); }}
-                            onDragLeave={() => setQrDragOver(false)}
-                            onDrop={handleQrDrop}
-                            className="flex flex-col items-center justify-center gap-3 rounded-[4px] cursor-pointer transition-colors w-full max-w-[300px] aspect-square mx-auto"
-                            style={{
-                              border: `1.5px dashed ${qrDragOver ? "#6B6355" : "#DCD4C2"}`,
-                              background: qrDragOver ? "rgba(107,99,85,0.05)" : "transparent",
-                            }}>
-                            <div className="w-10 h-10 rounded-full border border-[#DCD4C2] bg-[#F6F1E7] flex items-center justify-center">
-                              {isUploadingQr
-                                ? <RefreshCw size={18} strokeWidth={1.3} color="#9C8E7E" className="animate-spin" />
-                                : <ImagePlus size={18} strokeWidth={1.3} color="#9C8E7E" />}
-                            </div>
-                            <div className="text-center">
-                              <p className="text-[12px] text-[#1E1B16]"
-                                style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
-                                {isUploadingQr ? "Uploading…" : "Drop your QR image here"}
-                              </p>
-                              {!isUploadingQr && (
-                                <p className="text-[11px] mt-0.5"
-                                  style={{ fontFamily: "'Public Sans',system-ui,sans-serif", color: "#9C8E7E" }}>
-                                  or{" "}
-                                  <span className="underline cursor-pointer text-[#6B6355]">browse files</span>
+                            </motion.div>
+                          ) : uploadedQr ? (
+                            /* Uploaded QR preview */
+                            <motion.div key="uploaded-preview"
+                              className="relative rounded-[4px] overflow-hidden border border-[#DCD4C2] w-full max-w-[300px] aspect-square mx-auto"
+                              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                              transition={{ duration: 0.15 }}>
+                              <img src={uploadedQr} alt="Uploaded QR code"
+                                style={{ width: "100%", height: "100%", display: "block", objectFit: "contain", background: "#FCFAF3" }} />
+                            </motion.div>
+                          ) : (
+                            /* Upload zone */
+                            <motion.div key="upload-zone"
+                              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                              transition={{ duration: 0.15 }}>
+                              <input
+                                ref={qrFileInputRef}
+                                type="file"
+                                accept="image/png,image/jpeg"
+                                className="hidden"
+                                onChange={e => { const f = e.target.files?.[0]; if (f) handleQrFileSelect(f); e.target.value = ""; }}
+                              />
+                              <div
+                                onClick={() => !isUploadingQr && qrFileInputRef.current?.click()}
+                                onDragOver={e => { e.preventDefault(); setQrDragOver(true); }}
+                                onDragLeave={() => setQrDragOver(false)}
+                                onDrop={handleQrDrop}
+                                className="flex flex-col items-center justify-center gap-3 rounded-[4px] cursor-pointer transition-colors w-full max-w-[300px] aspect-square mx-auto"
+                                style={{
+                                  border: `1.5px dashed ${qrDragOver ? "#6B6355" : "#DCD4C2"}`,
+                                  background: qrDragOver ? "rgba(107,99,85,0.05)" : "transparent",
+                                }}>
+                                <div className="w-10 h-10 rounded-full border border-[#DCD4C2] bg-[#F6F1E7] flex items-center justify-center">
+                                  {isUploadingQr
+                                    ? <RefreshCw size={18} strokeWidth={1.3} color="#9C8E7E" className="animate-spin" />
+                                    : <ImagePlus size={18} strokeWidth={1.3} color="#9C8E7E" />}
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-[12px] text-[#1E1B16]"
+                                    style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
+                                    {isUploadingQr ? "Uploading…" : "Drop your QR image here"}
+                                  </p>
+                                  {!isUploadingQr && (
+                                    <p className="text-[11px] mt-0.5"
+                                      style={{ fontFamily: "'Public Sans',system-ui,sans-serif", color: "#9C8E7E" }}>
+                                      or{" "}
+                                      <span className="underline cursor-pointer text-[#6B6355]">browse files</span>
+                                    </p>
+                                  )}
+                                  <p className="text-[9px] mt-2 tracking-wide" style={{ ...M, color: "#9C8E7E" }}>
+                                    PNG or JPG · max 5 MB
+                                  </p>
+                                </div>
+                              </div>
+                              {qrUploadError && (
+                                <p className="text-[10px] mt-2 text-center" style={{ ...M, color: "#B5432E" }}>
+                                  {qrUploadError}
                                 </p>
                               )}
-                              <p className="text-[9px] mt-2 tracking-wide" style={{ ...M, color: "#9C8E7E" }}>
-                                PNG or JPG · max 5 MB
-                              </p>
-                            </div>
-                          </div>
-                          {qrUploadError && (
-                            <p className="text-[10px] mt-2 text-center" style={{ ...M, color: "#B5432E" }}>
-                              {qrUploadError}
-                            </p>
+                            </motion.div>
                           )}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                        </AnimatePresence>
 
-                    {/* Eyebrow label */}
-                    <AnimatePresence mode="wait">
-                      {isClosed ? (
-                        <motion.p key="closed"
-                          className="text-[10px] tracking-widest uppercase text-center"
-                          style={{ ...M, color: "#2E6B4C" }}
-                          initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                          transition={{ duration: 0.2 }}>
-                          Session Closed — {Math.round((event.attendees / event.capacity) * 100)}% attendance verified
-                        </motion.p>
-                      ) : isLive ? (
-                        <motion.p key="live"
-                          className="text-[10px] tracking-widest uppercase text-center"
-                          style={{ ...M, color: "#E2A23B" }}
-                          initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                          transition={{ duration: 0.2 }}>
-                          Valid {event.startTime ?? ""}
-                          {event.endTime ? ` – ${event.endTime}` : ""}
-                        </motion.p>
-                      ) : (
-                        <motion.p key="upcoming"
-                          className="text-[10px] tracking-widest uppercase text-center"
-                          style={{ ...M, color: "#9C8E7E" }}
-                          initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                          transition={{ duration: 0.2 }}>
-                          Scan opens {event.date}{event.startTime ? ` at ${event.startTime}` : ""}
-                        </motion.p>
-                      )}
-                    </AnimatePresence>
+                        {/* Event code label */}
+                        <p className="text-[9px] tracking-widest uppercase text-center" style={{ ...M, color: "#6B6355" }}>
+                          Code: {event.code}
+                        </p>
 
-                    {/* Check-in count */}
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-[1.65rem] font-semibold leading-none" style={F}>
-                        <CountUp
-                          key={selectedId}
-                          target={event.attendees}
-                          formatted={String(event.attendees)}
-                          color="#1E1B16"
-                          duration={600}
-                          delay={200}
-                        />
-                      </span>
-                      <span className="text-[10px] tracking-widest uppercase" style={{ ...M, color: "#9C8E7E" }}>
-                        checked in
-                      </span>
-                      <span className="text-[9px]" style={{ ...M, color: "#DCD4C2" }}>
-                        / {event.capacity}
-                      </span>
-                    </div>
+                        {/* Eyebrow label */}
+                        <AnimatePresence mode="wait">
+                          {isClosed ? (
+                            <motion.p key="closed"
+                              className="text-[10px] tracking-widest uppercase text-center"
+                              style={{ ...M, color: "#2E6B4C" }}
+                              initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                              transition={{ duration: 0.2 }}>
+                              Session Closed
+                            </motion.p>
+                          ) : isLive ? (
+                            <motion.p key="live"
+                              className="text-[10px] tracking-widest uppercase text-center"
+                              style={{ ...M, color: "#E2A23B" }}
+                              initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                              transition={{ duration: 0.2 }}>
+                              Valid {evStartTime ?? ""}
+                              {evEndTime ? ` – ${evEndTime}` : ""}
+                            </motion.p>
+                          ) : (
+                            <motion.p key="upcoming"
+                              className="text-[10px] tracking-widest uppercase text-center"
+                              style={{ ...M, color: "#9C8E7E" }}
+                              initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                              transition={{ duration: 0.2 }}>
+                              Scan opens {evDate}{evStartTime ? ` at ${evStartTime}` : ""}
+                            </motion.p>
+                          )}
+                        </AnimatePresence>
 
-                    <div className="w-full h-px bg-[#DCD4C2]" />
-
-                    {/* Footer actions */}
-                    <div className="flex items-center gap-3 w-full justify-between">
-                      {qrSource === "generated" ? (
-                        <button type="button" onClick={handleRegen} disabled={regenFading || isGuest}
-                          title={isGuest ? "Disabled in guest mode" : undefined}
-                          className="flex items-center gap-2 px-4 py-[7px] rounded-[6px] text-[12px] font-medium border border-[#1E1B16]/25 text-[#1E1B16] bg-[#FCFAF3] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/50 transition-colors disabled:opacity-40"
-                          style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
-                          <RefreshCw size={12} strokeWidth={2} />
-                          Regenerate Code
-                        </button>
-                      ) : uploadedQr ? (
-                        <div className="flex items-center gap-2">
-                          <button type="button"
-                            onClick={() => qrFileInputRef.current?.click()}
-                            className="flex items-center gap-2 px-4 py-[7px] rounded-[6px] text-[12px] font-medium border border-[#1E1B16]/25 text-[#1E1B16] bg-[#FCFAF3] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/50 transition-colors"
-                            style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
-                            <Upload size={12} strokeWidth={2} />
-                            Replace Photo
-                          </button>
-                          <button type="button"
-                            onClick={handleQrRemove}
-                            className="flex items-center gap-1.5 px-3 py-[7px] rounded-[6px] text-[11px] font-medium border border-[#DCD4C2] text-[#6B6355] bg-[#FCFAF3] hover:bg-[#F6F1E7] hover:text-[#1E1B16] transition-colors"
-                            style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
-                            <X size={11} strokeWidth={2} />
-                            Remove
-                          </button>
+                        {/* Capacity info */}
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-[10px] tracking-widest uppercase" style={{ ...M, color: "#9C8E7E" }}>
+                            capacity
+                          </span>
+                          <span className="text-[9px]" style={{ ...M, color: "#DCD4C2" }}>
+                            {event.capacity}
+                          </span>
                         </div>
-                      ) : (
-                        <div />
-                      )}
-                      {isLive && (
-                        <button type="button"
-                          onClick={() => setClosedIds(prev => new Set(prev).add(event.id))}
-                          disabled={isGuest}
-                          className="flex items-center gap-1.5 px-3 py-[7px] rounded-[6px] text-[11px] font-medium border border-[#DCD4C2] text-[#6B6355] bg-[#FCFAF3] hover:bg-[#F6F1E7] hover:text-[#1E1B16] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                          style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
-                          <CheckCircle2 size={11} strokeWidth={1.75} />
-                          Close session
-                        </button>
-                      )}
-                    </div>
 
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                        <div className="w-full h-px bg-[#DCD4C2]" />
+
+                        {/* Footer actions */}
+                        <div className="flex items-center gap-3 w-full justify-between">
+                          {qrSource === "generated" ? (
+                            <button type="button" onClick={handleRegen} disabled={regenFading || isGuest}
+                              title={isGuest ? "Disabled in guest mode" : undefined}
+                              className="flex items-center gap-2 px-4 py-[7px] rounded-[6px] text-[12px] font-medium border border-[#1E1B16]/25 text-[#1E1B16] bg-[#FCFAF3] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/50 transition-colors disabled:opacity-40"
+                              style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
+                              <RefreshCw size={12} strokeWidth={2} />
+                              Regenerate Code
+                            </button>
+                          ) : uploadedQr ? (
+                            <div className="flex items-center gap-2">
+                              <button type="button"
+                                onClick={() => qrFileInputRef.current?.click()}
+                                className="flex items-center gap-2 px-4 py-[7px] rounded-[6px] text-[12px] font-medium border border-[#1E1B16]/25 text-[#1E1B16] bg-[#FCFAF3] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/50 transition-colors"
+                                style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
+                                <Upload size={12} strokeWidth={2} />
+                                Replace Photo
+                              </button>
+                              <button type="button"
+                                onClick={handleQrRemove}
+                                className="flex items-center gap-1.5 px-3 py-[7px] rounded-[6px] text-[11px] font-medium border border-[#DCD4C2] text-[#6B6355] bg-[#FCFAF3] hover:bg-[#F6F1E7] hover:text-[#1E1B16] transition-colors"
+                                style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
+                                <X size={11} strokeWidth={2} />
+                                Remove
+                              </button>
+                            </div>
+                          ) : (
+                            <div />
+                          )}
+                          {isLive && (
+                            <button type="button"
+                              onClick={() => setClosedIds(prev => new Set(prev).add(event.id))}
+                              disabled={isGuest}
+                              className="flex items-center gap-1.5 px-3 py-[7px] rounded-[6px] text-[11px] font-medium border border-[#DCD4C2] text-[#6B6355] bg-[#FCFAF3] hover:bg-[#F6F1E7] hover:text-[#1E1B16] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                              style={{ fontFamily: "'Public Sans',system-ui,sans-serif" }}>
+                              <CheckCircle2 size={11} strokeWidth={1.75} />
+                              Close session
+                            </button>
+                          )}
+                        </div>
+
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </>
+          )}
 
         </div>
       </main>

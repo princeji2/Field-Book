@@ -1,4 +1,4 @@
-import { useParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 import {
   OrganizerDashboard, EventsWorkspaceScreen, OrgAnalyticsScreen,
   OrgCertificatesScreen, OrgQRScreen, OrgAttendeesScreen,
@@ -40,9 +40,11 @@ export function EventsWorkspaceCreateRoute() {
 export function OrgQRRoute() {
   const onNavigate = useScreenNav();
   const { isGuest, profile } = useAuth();
+  const [searchParams] = useSearchParams();
+  const initialEventId = searchParams.get("event") ?? undefined;
   return (
     <Fade>
-      <OrgQRScreen onNavigate={onNavigate} isGuest={isGuest} profile={profile} />
+      <OrgQRScreen onNavigate={onNavigate} isGuest={isGuest} profile={profile} initialEventId={initialEventId} />
     </Fade>
   );
 }

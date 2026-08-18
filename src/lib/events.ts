@@ -24,11 +24,12 @@ export interface EventRow {
   end_time: string | null;
   capacity: number;
   status: EventStatus;
+  qr_photo_url: string | null;
   created_at?: string;
 }
 
 const EVENT_COLUMNS =
-  "id, title, code, organizer_id, department, category, description, location_type, venue, event_date, start_time, end_time, capacity, status, created_at";
+  "id, title, code, organizer_id, department, category, description, location_type, venue, event_date, start_time, end_time, capacity, status, qr_photo_url, created_at";
 
 export type ListEventsResult =
   | { status: "success"; events: EventRow[] }
@@ -92,6 +93,26 @@ export async function getEventById(id: string): Promise<GetEventResult> {
 
   if (error || !data) {
     return { status: "error", message: error?.message ?? "Event not found." };
+  }
+  return { status: "success", event: data as EventRow };
+}
+
+/**
+ * Looks up a publicly-visible event by its human-readable code (e.g.
+ * "ENV-POL-2026-A1B2"). Used by the student scanner's manual code entry.
+ * Only returns events with status in ('published','live') — completed
+ * events shouldn't accept new attendance.
+ */
+export async function getEventByCode(code: string): Promise<GetEventResult> {
+  const { data, error } = await supabase
+    .from("events")
+    .select(EVENT_COLUMNS)
+    .eq("code", code)
+    .in("status", ["published", "live"])
+    .single();
+
+  if (error || !data) {
+    return { status: "error", message: "Event not found. Check the code and try again." };
   }
   return { status: "success", event: data as EventRow };
 }

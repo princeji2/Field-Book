@@ -26,8 +26,13 @@ import { type AuthedProfile } from "../lib/auth";
 import { generateCertificate, generateCertificateCode } from "../lib/certificates";
 import {
   type StudentEventCard,
+  type EventRow,
   listStudentExploreEvents,
   getStudentEventById,
+  getEventByCode,
+  getEventById,
+  formatEventDate,
+  formatEventTimeRange,
 } from "../lib/events";
 
 // ─── Student Dashboard ────────────────────────────────────────────────────────
@@ -1774,14 +1779,27 @@ export function ScannerScreen({
   onNavigate: (s: Screen) => void;
   isGuest?: boolean;
 }) {
-  const scannedEvent: MyRegisteredEvent =
-    MY_UPCOMING.find(e => e.id === eventId) ?? MY_UPCOMING[0];
+  // ── Load event from Supabase ──
+  const [eventData, setEventData] = useState<EventRow | null>(null);
+  const [eventLoading, setEventLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      if (!eventId) { setEventLoading(false); return; }
+      setEventLoading(true);
+      const result = await getEventById(eventId);
+      setEventLoading(false);
+      if (result.status === "success") setEventData(result.event);
+    }
+    void load();
+  }, [eventId]);
 
   const [phase,       setPhase]       = useState<"scanning" | "success">("scanning");
   const [showManual,  setShowManual]  = useState(false);
   const [manualCode,  setManualCode]  = useState("");
   const [manualError, setManualError] = useState<string | null>(null);
-  const [confirmedEv, setConfirmedEv] = useState<MyRegisteredEvent>(scannedEvent);
+  const [manualLoading, setManualLoading] = useState(false);
+  const [confirmedEv, setConfirmedEv] = useState<EventRow | null>(null);
 
   // Capture check-in timestamp once on mount
   const [timestamp] = useState(() => {
@@ -1792,28 +1810,48 @@ export function ScannerScreen({
     return `${h12}:${mm} ${h >= 12 ? "PM" : "AM"}`;
   });
 
-  // Auto-scan simulation: fires after 3 s
+  // Auto-scan simulation: fires after 3.2 s (simulates camera detecting QR)
   useEffect(() => {
-    if (phase !== "scanning") return;
-    const t = setTimeout(() => setPhase("success"), 3200);
+    if (phase !== "scanning" || !eventData) return;
+    const t = setTimeout(() => {
+      setConfirmedEv(eventData);
+      setPhase("success");
+    }, 3200);
     return () => clearTimeout(t);
-  }, [phase]);
+  }, [phase, eventData]);
 
-  function handleManualSubmit() {
+  async function handleManualSubmit() {
     const code = manualCode.trim().toUpperCase();
-    const found = MY_UPCOMING.find(e => e.code === code);
-    if (found) {
-      setConfirmedEv(found);
+    if (!code) return;
+    setManualLoading(true);
+    setManualError(null);
+    const result = await getEventByCode(code);
+    setManualLoading(false);
+    if (result.status === "success") {
+      setConfirmedEv(result.event);
       setPhase("success");
     } else {
-      setManualError("Code not found. Check the event code and try again.");
+      setManualError(result.message);
     }
   }
 
   function triggerScan() {
-    setConfirmedEv(scannedEvent);
+    if (!eventData) return;
+    setConfirmedEv(eventData);
     setPhase("success");
   }
+
+  // Display helpers for current event context
+  const displayTitle = eventData?.title ?? "Event";
+  const displayDate = eventData ? formatEventDate(eventData.event_date) : "";
+  const displayTime = eventData ? formatEventTimeRange(eventData.start_time, eventData.end_time) : "";
+  const displayVenue = eventData?.venue ?? "Venue TBD";
+
+  // Display helpers for confirmed event (success phase)
+  const confirmedTitle = confirmedEv?.title ?? "";
+  const confirmedVenue = confirmedEv?.venue ?? "Venue TBD";
+  const confirmedDate = confirmedEv ? formatEventDate(confirmedEv.event_date) : "";
+  const confirmedCode = confirmedEv?.code ?? "";
 
   return (
     <div className="min-h-screen bg-[#F6F1E7] flex flex-col" style={dotGrid}>
@@ -1835,6 +1873,14 @@ export function ScannerScreen({
 
       {/* ── Content ── */}
       <div className="flex-1 flex items-center justify-center px-6 py-10">
+        {/* Loading state */}
+        {eventLoading && (
+          <div className="flex items-center justify-center">
+            <RefreshCw size={18} strokeWidth={1.5} className="animate-spin text-[#6B6355]" />
+          </div>
+        )}
+
+        {!eventLoading && (
         <AnimatePresence mode="wait">
 
           {/* ────── Scanning phase ────── */}
@@ -1849,10 +1895,10 @@ export function ScannerScreen({
             >
               {/* Context label */}
               <div className="text-center space-y-1.5">
-                <p className="text-[8px] tracking-widest uppercase text-[#6B6355]" style={M}>Checking in to</p>
-                <p className="text-base font-semibold text-[#1E1B16] leading-snug" style={F}>{scannedEvent.title}</p>
+                <p className="text-[8px] tracking-widest uppercase text-[#6B6355]" style={M}>Recording attendance for</p>
+                <p className="text-base font-semibold text-[#1E1B16] leading-snug" style={F}>{displayTitle}</p>
                 <div className="flex items-center justify-center gap-2">
-                  <span className="text-[8px] text-[#6B6355]" style={M}>{scannedEvent.date} · {scannedEvent.time}</span>
+                  <span className="text-[8px] text-[#6B6355]" style={M}>{displayDate} · {displayTime}</span>
                 </div>
               </div>
 
@@ -1916,8 +1962,8 @@ export function ScannerScreen({
                 <button
                   className="absolute inset-0 focus:outline-none"
                   onClick={triggerScan}
-                  disabled={isGuest}
-                  title={isGuest ? "Disabled in guest mode" : undefined}
+                  disabled={isGuest || !eventData}
+                  title={isGuest ? "Disabled in guest mode" : "Simulate QR scan"}
                   aria-label="Simulate QR scan"
                 />
 
@@ -1968,18 +2014,20 @@ export function ScannerScreen({
                             value={manualCode}
                             onChange={e => { setManualCode(e.target.value.toUpperCase()); setManualError(null); }}
                             onKeyDown={e => e.key === "Enter" && handleManualSubmit()}
-                            placeholder="e.g. ENV-POL-2024"
+                            placeholder="e.g. ENV-POL-2026-A1B2"
                             className="flex-1 min-w-0 px-3.5 py-2.5 bg-[#FCFAF3] border border-[#DCD4C2] rounded-[7px] text-sm text-[#1E1B16] placeholder:text-[#DCD4C2] outline-none focus:border-[#1E1B16]/40 transition-colors"
                             style={M}
                           />
                           <button
                             onClick={handleManualSubmit}
-                            disabled={isGuest}
+                            disabled={isGuest || manualLoading}
                             title={isGuest ? "Disabled in guest mode" : undefined}
                             aria-label="Submit event code"
                             className="w-10 flex items-center justify-center bg-[#1E1B16] text-[#F6F1E7] rounded-[7px] border border-[#1E1B16] hover:bg-[#2E2A22] transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                           >
-                            <ArrowRight size={14} />
+                            {manualLoading
+                              ? <RefreshCw size={12} strokeWidth={2} className="animate-spin" />
+                              : <ArrowRight size={14} />}
                           </button>
                         </div>
                         {manualError && (
@@ -1992,7 +2040,7 @@ export function ScannerScreen({
                           </motion.p>
                         )}
                         <p className="text-[8px] text-[#DCD4C2] text-center" style={M}>
-                          Valid codes: {MY_UPCOMING.map(e => e.code).join(", ")}
+                          Enter the event code shown on the attendance QR
                         </p>
                       </div>
                     </motion.div>
@@ -2003,7 +2051,7 @@ export function ScannerScreen({
           )}
 
           {/* ────── Success phase ────── */}
-          {phase === "success" && (
+          {phase === "success" && confirmedEv && (
             <motion.div
               key="success"
               initial={{ opacity: 0, y: 14 }}
@@ -2019,7 +2067,7 @@ export function ScannerScreen({
                   <span className="text-[8px] tracking-widest uppercase text-[#6B6355]" style={M}>
                     Attendance Recorded
                   </span>
-                  <span className="text-[8px] text-[#DCD4C2]" style={M}>{confirmedEv.code}</span>
+                  <span className="text-[8px] text-[#DCD4C2]" style={M}>{confirmedCode}</span>
                 </div>
 
                 {/* Card body */}
@@ -2041,10 +2089,9 @@ export function ScannerScreen({
                   {/* Receipt rows */}
                   <div className="w-full space-y-3">
                     {[
-                      { label: "Event",   value: confirmedEv.title,             serif: true  },
-                      { label: "Venue",   value: confirmedEv.venue,             serif: false },
-                      { label: "Time",    value: `${timestamp} · ${confirmedEv.date}`, serif: false, mono: true },
-                      { label: "Student", value: "Sarah Chen · SCH-4421",       serif: false, mono: true },
+                      { label: "Event",   value: confirmedTitle,             serif: true  },
+                      { label: "Venue",   value: confirmedVenue,             serif: false },
+                      { label: "Time",    value: `${timestamp} · ${confirmedDate}`, serif: false, mono: true },
                     ].map(({ label, value, serif, mono }) => (
                       <div key={label} className="flex items-start justify-between gap-4">
                         <span
@@ -2079,6 +2126,7 @@ export function ScannerScreen({
           )}
 
         </AnimatePresence>
+        )}
       </div>
     </div>
   );

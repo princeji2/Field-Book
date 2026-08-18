@@ -33,7 +33,7 @@ export function screenToPath(screen: Screen, id?: string): string {
     case "org-dashboard": return "/organizer/dashboard";
     case "org-events": return "/organizer/events";
     case "org-events-create": return "/organizer/events/create";
-    case "org-qr": return "/organizer/qr";
+    case "org-qr": return id ? `/organizer/qr?event=${id}` : "/organizer/qr";
     case "org-attendees": return id ? `/organizer/attendees/${id}` : "/organizer/attendees";
     case "org-analytics": return "/organizer/analytics";
     case "org-certs": return "/organizer/certificates";
