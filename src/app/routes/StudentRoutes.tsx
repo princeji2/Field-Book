@@ -60,11 +60,11 @@ export function MyEventsRoute() {
 
 export function ScannerRoute() {
   const onNavigate = useScreenNav();
-  const { isGuest } = useAuth();
+  const { isGuest, profile } = useAuth();
   const { eventId } = useParams();
   return (
     <Fade duration={0.2}>
-      <ScannerScreen eventId={eventId ?? "1"} onNavigate={onNavigate} isGuest={isGuest} />
+      <ScannerScreen eventId={eventId} onNavigate={onNavigate} isGuest={isGuest} profile={profile} />
     </Fade>
   );
 }

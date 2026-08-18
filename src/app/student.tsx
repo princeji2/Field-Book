@@ -24,6 +24,7 @@ import {
 import { ProfileScreen } from "./profile";
 import { type AuthedProfile } from "../lib/auth";
 import { generateCertificate, generateCertificateCode } from "../lib/certificates";
+import { recordAttendance } from "../lib/attendance";
 import {
   type StudentEventCard,
   type EventRow,
@@ -64,6 +65,7 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
     if (id === "landing")  { onNavigate?.("landing");  return; }
     if (id === "explore")  { onNavigate?.("explore");  return; }
     if (id === "events")   { onNavigate?.("myevents"); return; }
+    if (id === "scanner")  { onNavigate?.("scanner");  return; }
     if (id === "certs")    { onNavigate?.("certs");    return; }
     if (id === "notifs")   { onNavigate?.("notifs");   return; }
     setActiveNav(id);
@@ -124,11 +126,17 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <button className="flex items-center gap-2 px-5 py-2.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors">
+                      <button
+                        onClick={() => onNavigate?.("scanner", previewEvents[0]?.id)}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors"
+                      >
                         <QrCode size={13} strokeWidth={1.5} />
                         Check In via QR
                       </button>
-                      <button className="px-5 py-2.5 text-sm text-[#6B6355] border border-[#DCD4C2] rounded-[7px] hover:border-[#1E1B16]/30 transition-colors">
+                      <button
+                        onClick={() => onNavigate?.("details", previewEvents[0]?.id)}
+                        className="px-5 py-2.5 text-sm text-[#6B6355] border border-[#DCD4C2] rounded-[7px] hover:border-[#1E1B16]/30 transition-colors"
+                      >
                         View Details →
                       </button>
                     </div>
@@ -1034,6 +1042,7 @@ export function ExploreScreen({
     if (id === "landing")   { onNavigate("landing");   return; }
     if (id === "dashboard") { onNavigate("dashboard");  return; }
     if (id === "events")    { onNavigate("myevents");   return; }
+    if (id === "scanner")   { onNavigate("scanner");    return; }
     if (id === "certs")     { onNavigate("certs");      return; }
     if (id === "notifs")    { onNavigate("notifs");     return; }
     setActiveNav(id);
@@ -1588,6 +1597,7 @@ export function MyEventsScreen({
     if (id === "landing")   { onNavigate("landing");   return; }
     if (id === "dashboard") { onNavigate("dashboard"); return; }
     if (id === "explore")   { onNavigate("explore");   return; }
+    if (id === "scanner")   { onNavigate("scanner");   return; }
     if (id === "certs")     { onNavigate("certs");     return; }
     if (id === "notifs")    { onNavigate("notifs");    return; }
   }
@@ -1769,19 +1779,21 @@ export function MyEventsScreen({
   );
 }
 
-// ─── QR Scanner / Check-in screen ────────────────────────────────────────────
+// ─── QR Scanner / Attendance screen ──────────────────────────────────────────
 export function ScannerScreen({
   eventId,
   onNavigate,
   isGuest,
+  profile,
 }: {
   eventId?: string;
   onNavigate: (s: Screen) => void;
   isGuest?: boolean;
+  profile?: AuthedProfile | null;
 }) {
-  // ── Load event from Supabase ──
+  // ── Load event from Supabase (when navigated with a specific eventId) ──
   const [eventData, setEventData] = useState<EventRow | null>(null);
-  const [eventLoading, setEventLoading] = useState(true);
+  const [eventLoading, setEventLoading] = useState(!!eventId);
 
   useEffect(() => {
     async function load() {
@@ -1794,60 +1806,103 @@ export function ScannerScreen({
     void load();
   }, [eventId]);
 
-  const [phase,       setPhase]       = useState<"scanning" | "success">("scanning");
-  const [showManual,  setShowManual]  = useState(false);
-  const [manualCode,  setManualCode]  = useState("");
+  const [phase, setPhase] = useState<"scanning" | "recording" | "success" | "error">("scanning");
+  const [showManual, setShowManual] = useState(!eventId); // Show manual entry by default if no eventId
+  const [manualCode, setManualCode] = useState("");
   const [manualError, setManualError] = useState<string | null>(null);
   const [manualLoading, setManualLoading] = useState(false);
   const [confirmedEv, setConfirmedEv] = useState<EventRow | null>(null);
+  const [attendanceError, setAttendanceError] = useState<string | null>(null);
 
-  // Capture check-in timestamp once on mount
-  const [timestamp] = useState(() => {
+  // Capture attendance timestamp
+  const [timestamp, setTimestamp] = useState(() => {
     const now = new Date();
-    const h   = now.getHours();
-    const mm  = String(now.getMinutes()).padStart(2, "0");
+    const h = now.getHours();
+    const mm = String(now.getMinutes()).padStart(2, "0");
     const h12 = h % 12 || 12;
     return `${h12}:${mm} ${h >= 12 ? "PM" : "AM"}`;
   });
 
-  // Auto-scan simulation: fires after 3.2 s (simulates camera detecting QR)
-  useEffect(() => {
-    if (phase !== "scanning" || !eventData) return;
-    const t = setTimeout(() => {
-      setConfirmedEv(eventData);
-      setPhase("success");
-    }, 3200);
-    return () => clearTimeout(t);
-  }, [phase, eventData]);
+  /**
+   * Core attendance recording logic. Validates the event, checks status,
+   * then calls recordAttendance to persist to the database.
+   */
+  async function doRecordAttendance(event: EventRow) {
+    if (!profile?.id) {
+      setAttendanceError("You must be signed in to record attendance.");
+      setPhase("error");
+      return;
+    }
 
+    // Validate event status — only published or live events accept attendance
+    if (event.status !== "published" && event.status !== "live") {
+      setAttendanceError(
+        event.status === "completed"
+          ? "This event has ended. Attendance can no longer be recorded."
+          : "This event is not yet available for attendance."
+      );
+      setPhase("error");
+      return;
+    }
+
+    setPhase("recording");
+    setConfirmedEv(event);
+
+    const result = await recordAttendance(profile.id, event.id);
+
+    if (result.status === "success") {
+      // Update timestamp to the actual recording moment
+      const now = new Date();
+      const h = now.getHours();
+      const mm = String(now.getMinutes()).padStart(2, "0");
+      const h12 = h % 12 || 12;
+      setTimestamp(`${h12}:${mm} ${h >= 12 ? "PM" : "AM"}`);
+      setPhase("success");
+    } else if (result.status === "duplicate") {
+      setAttendanceError(result.message);
+      setPhase("error");
+    } else {
+      setAttendanceError(result.message);
+      setPhase("error");
+    }
+  }
+
+  /**
+   * Manual code submission: looks up event by code, then records attendance.
+   */
   async function handleManualSubmit() {
     const code = manualCode.trim().toUpperCase();
     if (!code) return;
     setManualLoading(true);
     setManualError(null);
+
     const result = await getEventByCode(code);
     setManualLoading(false);
-    if (result.status === "success") {
-      setConfirmedEv(result.event);
-      setPhase("success");
-    } else {
+
+    if (result.status === "error") {
       setManualError(result.message);
+      return;
     }
+
+    // Found a valid event — record attendance
+    await doRecordAttendance(result.event);
   }
 
-  function triggerScan() {
+  /**
+   * Tap-to-scan: uses the pre-loaded event (when navigated with eventId).
+   * In a real implementation this would be triggered by camera QR detection.
+   */
+  async function triggerScan() {
     if (!eventData) return;
-    setConfirmedEv(eventData);
-    setPhase("success");
+    await doRecordAttendance(eventData);
   }
 
   // Display helpers for current event context
-  const displayTitle = eventData?.title ?? "Event";
+  const displayTitle = eventData?.title ?? "Scan Event QR";
   const displayDate = eventData ? formatEventDate(eventData.event_date) : "";
   const displayTime = eventData ? formatEventTimeRange(eventData.start_time, eventData.end_time) : "";
-  const displayVenue = eventData?.venue ?? "Venue TBD";
 
-  // Display helpers for confirmed event (success phase)
+  // Display helpers for confirmed event (success/error phase)
   const confirmedTitle = confirmedEv?.title ?? "";
   const confirmedVenue = confirmedEv?.venue ?? "Venue TBD";
   const confirmedDate = confirmedEv ? formatEventDate(confirmedEv.event_date) : "";
@@ -1895,108 +1950,121 @@ export function ScannerScreen({
             >
               {/* Context label */}
               <div className="text-center space-y-1.5">
-                <p className="text-[8px] tracking-widest uppercase text-[#6B6355]" style={M}>Recording attendance for</p>
-                <p className="text-base font-semibold text-[#1E1B16] leading-snug" style={F}>{displayTitle}</p>
-                <div className="flex items-center justify-center gap-2">
-                  <span className="text-[8px] text-[#6B6355]" style={M}>{displayDate} · {displayTime}</span>
-                </div>
+                <p className="text-[8px] tracking-widest uppercase text-[#6B6355]" style={M}>Recording attendance</p>
+                {eventData && (
+                  <>
+                    <p className="text-base font-semibold text-[#1E1B16] leading-snug" style={F}>{displayTitle}</p>
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-[8px] text-[#6B6355]" style={M}>{displayDate} · {displayTime}</span>
+                    </div>
+                  </>
+                )}
+                {!eventData && (
+                  <p className="text-sm text-[#6B6355]">Scan the QR code or enter the event code below.</p>
+                )}
               </div>
 
-              {/* Camera viewport */}
-              <div
-                className="relative w-full max-w-[300px] aspect-square rounded-[10px] overflow-hidden mx-auto"
-                style={{ background: "#0D0B09" }}
-              >
-                {/* Camera grain/texture */}
+              {/* Camera viewport (shown when navigated with a specific event) */}
+              {eventData && (
                 <div
-                  className="absolute inset-0 opacity-[0.07] pointer-events-none"
-                  style={{
-                    backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 64 64' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E\")",
-                    backgroundSize: "64px 64px",
-                  }}
-                />
-                {/* Vignette */}
-                <div
-                  className="absolute inset-0 pointer-events-none"
-                  style={{ background: "radial-gradient(ellipse at center, transparent 35%, rgba(8,7,5,0.82) 100%)" }}
-                />
+                  className="relative w-full max-w-[300px] aspect-square rounded-[10px] overflow-hidden mx-auto"
+                  style={{ background: "#0D0B09" }}
+                >
+                  {/* Camera grain/texture */}
+                  <div
+                    className="absolute inset-0 opacity-[0.07] pointer-events-none"
+                    style={{
+                      backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 64 64' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E\")",
+                      backgroundSize: "64px 64px",
+                    }}
+                  />
+                  {/* Vignette */}
+                  <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{ background: "radial-gradient(ellipse at center, transparent 35%, rgba(8,7,5,0.82) 100%)" }}
+                  />
 
-                {/* Ghosted QR — simulates camera detecting the code */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div style={{ opacity: 0.17, filter: "invert(1)" }}>
-                    <MockQR size={156} />
+                  {/* Ghosted QR — simulates camera detecting the code */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div style={{ opacity: 0.17, filter: "invert(1)" }}>
+                      <MockQR size={156} />
+                    </div>
+                  </div>
+
+                  {/* Scan frame: outer pulsing ring */}
+                  <motion.div
+                    className="absolute inset-6 border border-[#E2A23B]/10 pointer-events-none rounded-[2px]"
+                    animate={{ opacity: [0.3, 0.9, 0.3] }}
+                    transition={{ duration: 2.1, repeat: Infinity, ease: "easeInOut" }}
+                  />
+
+                  {/* Corner brackets */}
+                  <div className="absolute top-6 left-6 w-7 h-7 border-t-[2.5px] border-l-[2.5px] border-[#E2A23B] rounded-tl-[2px]" />
+                  <div className="absolute top-6 right-6 w-7 h-7 border-t-[2.5px] border-r-[2.5px] border-[#E2A23B] rounded-tr-[2px]" />
+                  <div className="absolute bottom-6 left-6 w-7 h-7 border-b-[2.5px] border-l-[2.5px] border-[#E2A23B] rounded-bl-[2px]" />
+                  <div className="absolute bottom-6 right-6 w-7 h-7 border-b-[2.5px] border-r-[2.5px] border-[#E2A23B] rounded-br-[2px]" />
+
+                  {/* Animated scan line */}
+                  <motion.div
+                    className="absolute left-6 right-6 pointer-events-none"
+                    style={{
+                      height: "1.5px",
+                      background: "linear-gradient(90deg, transparent 0%, #E2A23B 22%, #E2A23B 78%, transparent 100%)",
+                      boxShadow: "0 0 10px 3px rgba(226,162,59,0.35)",
+                    }}
+                    initial={{ top: "14%" }}
+                    animate={{ top: ["14%", "82%"] }}
+                    transition={{ duration: 2.4, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
+                  />
+
+                  {/* Tap-to-scan affordance */}
+                  <button
+                    className="absolute inset-0 focus:outline-none"
+                    onClick={triggerScan}
+                    disabled={isGuest || !eventData}
+                    title={isGuest ? "Disabled in guest mode" : "Tap to record attendance"}
+                    aria-label="Record attendance for this event"
+                  />
+
+                  {/* Status bar */}
+                  <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1.5 pb-3 pointer-events-none">
+                    <motion.span
+                      className="w-1 h-1 rounded-full bg-[#E2A23B]"
+                      animate={{ opacity: [1, 0.25, 1] }}
+                      transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                    />
+                    <span className="text-[7px] text-[#E2A23B]/60 tracking-widest" style={M}>SCANNING</span>
                   </div>
                 </div>
-
-                {/* Scan frame: outer pulsing ring */}
-                <motion.div
-                  className="absolute inset-6 border border-[#E2A23B]/10 pointer-events-none rounded-[2px]"
-                  animate={{ opacity: [0.3, 0.9, 0.3] }}
-                  transition={{ duration: 2.1, repeat: Infinity, ease: "easeInOut" }}
-                />
-
-                {/* Corner brackets */}
-                {/* TL */ }
-                <div className="absolute top-6 left-6 w-7 h-7 border-t-[2.5px] border-l-[2.5px] border-[#E2A23B] rounded-tl-[2px]" />
-                {/* TR */}
-                <div className="absolute top-6 right-6 w-7 h-7 border-t-[2.5px] border-r-[2.5px] border-[#E2A23B] rounded-tr-[2px]" />
-                {/* BL */}
-                <div className="absolute bottom-6 left-6 w-7 h-7 border-b-[2.5px] border-l-[2.5px] border-[#E2A23B] rounded-bl-[2px]" />
-                {/* BR */}
-                <div className="absolute bottom-6 right-6 w-7 h-7 border-b-[2.5px] border-r-[2.5px] border-[#E2A23B] rounded-br-[2px]" />
-
-                {/* Animated scan line */}
-                <motion.div
-                  className="absolute left-6 right-6 pointer-events-none"
-                  style={{
-                    height: "1.5px",
-                    background: "linear-gradient(90deg, transparent 0%, #E2A23B 22%, #E2A23B 78%, transparent 100%)",
-                    boxShadow: "0 0 10px 3px rgba(226,162,59,0.35)",
-                  }}
-                  initial={{ top: "14%" }}
-                  animate={{ top: ["14%", "82%"] }}
-                  transition={{ duration: 2.4, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
-                />
-
-                {/* Tap-to-scan demo affordance */}
-                <button
-                  className="absolute inset-0 focus:outline-none"
-                  onClick={triggerScan}
-                  disabled={isGuest || !eventData}
-                  title={isGuest ? "Disabled in guest mode" : "Simulate QR scan"}
-                  aria-label="Simulate QR scan"
-                />
-
-                {/* Status bar */}
-                <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1.5 pb-3 pointer-events-none">
-                  <motion.span
-                    className="w-1 h-1 rounded-full bg-[#E2A23B]"
-                    animate={{ opacity: [1, 0.25, 1] }}
-                    transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
-                  />
-                  <span className="text-[7px] text-[#E2A23B]/60 tracking-widest" style={M}>SCANNING</span>
-                </div>
-              </div>
+              )}
 
               {/* Instructions */}
               <div className="text-center space-y-1.5">
-                <p className="text-sm text-[#1E1B16]">Point the camera at the event QR code.</p>
-                <p className="text-xs text-[#6B6355]">Hold steady — the code scans automatically.</p>
+                {eventData ? (
+                  <>
+                    <p className="text-sm text-[#1E1B16]">Point the camera at the event QR code.</p>
+                    <p className="text-xs text-[#6B6355]">Or tap the viewport to record attendance now.</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-[#1E1B16]">Enter the event attendance code below.</p>
+                )}
               </div>
 
               {/* Manual entry */}
               <div className="w-full space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px bg-[#DCD4C2]" />
-                  <button
-                    onClick={() => { setShowManual(v => !v); setManualError(null); setManualCode(""); }}
-                    className="text-[9px] text-[#6B6355] hover:text-[#1E1B16] transition-colors flex-shrink-0"
-                    style={M}
-                  >
-                    {showManual ? "Hide manual entry" : "Enter code manually"}
-                  </button>
-                  <div className="flex-1 h-px bg-[#DCD4C2]" />
-                </div>
+                {eventData && (
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-px bg-[#DCD4C2]" />
+                    <button
+                      onClick={() => { setShowManual(v => !v); setManualError(null); setManualCode(""); }}
+                      className="text-[9px] text-[#6B6355] hover:text-[#1E1B16] transition-colors flex-shrink-0"
+                      style={M}
+                    >
+                      {showManual ? "Hide manual entry" : "Enter code manually"}
+                    </button>
+                    <div className="flex-1 h-px bg-[#DCD4C2]" />
+                  </div>
+                )}
 
                 <AnimatePresence>
                   {showManual && (
@@ -2050,6 +2118,21 @@ export function ScannerScreen({
             </motion.div>
           )}
 
+          {/* ────── Recording phase (brief loading) ────── */}
+          {phase === "recording" && (
+            <motion.div
+              key="recording"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="flex flex-col items-center gap-4"
+            >
+              <RefreshCw size={20} strokeWidth={1.5} className="animate-spin text-[#E2A23B]" />
+              <p className="text-sm text-[#6B6355]">Recording attendance…</p>
+            </motion.div>
+          )}
+
           {/* ────── Success phase ────── */}
           {phase === "success" && confirmedEv && (
             <motion.div
@@ -2079,9 +2162,9 @@ export function ScannerScreen({
                   {/* Status */}
                   <div className="text-center">
                     <h2 className="text-[1.8rem] font-semibold text-[#1E1B16] leading-tight" style={F}>
-                      Checked in.
+                      Attendance Recorded.
                     </h2>
-                    <p className="text-sm text-[#6B6355] mt-1">Your attendance has been recorded to your ledger.</p>
+                    <p className="text-sm text-[#6B6355] mt-1">Your attendance for this event has been saved.</p>
                   </div>
 
                   <div className="w-full h-px bg-[#DCD4C2]" />
@@ -2120,6 +2203,72 @@ export function ScannerScreen({
                     Done
                     <Check size={13} strokeWidth={2.5} className="text-[#2E6B4C]" />
                   </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ────── Error phase ────── */}
+          {phase === "error" && (
+            <motion.div
+              key="error"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="w-full max-w-sm"
+            >
+              <div className="bg-[#FCFAF3] border border-[#1E1B16]/20 rounded-[8px] overflow-hidden">
+
+                {/* Card header */}
+                <div className="px-6 py-3 bg-[#F6F1E7] border-b border-[#DCD4C2] flex items-center justify-between">
+                  <span className="text-[8px] tracking-widest uppercase text-[#B5432E]" style={M}>
+                    Attendance Not Recorded
+                  </span>
+                  {confirmedCode && <span className="text-[8px] text-[#DCD4C2]" style={M}>{confirmedCode}</span>}
+                </div>
+
+                {/* Card body */}
+                <div className="px-6 py-8 flex flex-col items-center gap-5">
+                  <div className="w-12 h-12 rounded-full border border-[#B5432E]/30 flex items-center justify-center">
+                    <AlertTriangle size={20} strokeWidth={1.5} className="text-[#B5432E]" />
+                  </div>
+
+                  <div className="text-center">
+                    <h2 className="text-lg font-semibold text-[#1E1B16] leading-snug" style={F}>
+                      Could not record attendance
+                    </h2>
+                    <p className="text-sm text-[#6B6355] mt-2">{attendanceError}</p>
+                  </div>
+
+                  {confirmedEv && (
+                    <>
+                      <div className="w-full h-px bg-[#DCD4C2]" />
+                      <div className="w-full space-y-2">
+                        <div className="flex items-start justify-between gap-4">
+                          <span className="text-[8px] tracking-widest uppercase text-[#6B6355]" style={M}>Event</span>
+                          <span className="text-sm text-[#1E1B16] text-right" style={F}>{confirmedTitle}</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="w-full h-px bg-[#DCD4C2]" />
+
+                  <div className="flex items-center gap-3 w-full">
+                    <button
+                      onClick={() => { setPhase("scanning"); setAttendanceError(null); setManualError(null); }}
+                      className="flex-1 py-2.5 border border-[#1E1B16]/25 rounded-[7px] text-sm font-medium text-[#1E1B16] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/40 transition-colors text-center"
+                    >
+                      Try Again
+                    </button>
+                    <button
+                      onClick={() => onNavigate("myevents")}
+                      className="flex-1 py-2.5 border border-[#DCD4C2] rounded-[7px] text-sm text-[#6B6355] hover:border-[#1E1B16]/30 transition-colors text-center"
+                    >
+                      Back to Events
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -2590,6 +2739,7 @@ export function CertificatesScreen({
     if (id === "dashboard") { onNavigate("dashboard"); return; }
     if (id === "explore")   { onNavigate("explore");   return; }
     if (id === "events")    { onNavigate("myevents");  return; }
+    if (id === "scanner")   { onNavigate("scanner");   return; }
     if (id === "notifs")    { onNavigate("notifs");    return; }
   }
 
@@ -2852,6 +3002,7 @@ export function NotificationsScreen({ onNavigate, isGuest, profile }: { onNaviga
     if (id === "dashboard") { onNavigate("dashboard"); return; }
     if (id === "explore")   { onNavigate("explore");   return; }
     if (id === "events")    { onNavigate("myevents");  return; }
+    if (id === "scanner")   { onNavigate("scanner");   return; }
     if (id === "certs")     { onNavigate("certs");     return; }
     setActiveNav(id);
   }

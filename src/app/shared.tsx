@@ -1488,6 +1488,7 @@ export const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard",      icon: Home     },
   { id: "explore",   label: "Explore Events", icon: Compass  },
   { id: "events",    label: "My Events",      icon: Calendar },
+  { id: "scanner",   label: "Attendance",     icon: Scan     },
   { id: "certs",     label: "Certificates",   icon: Award    },
   { id: "notifs",    label: "Notifications",  icon: Bell     },
 ] as const;
