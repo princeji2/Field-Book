@@ -20,10 +20,13 @@ const AdminUiContext = createContext<AdminUiContextValue | null>(null);
  * that same cross-screen behavior.
  */
 export function AdminUiProvider({ children }: { children: ReactNode }) {
-  const [livePendingApprovals, setLivePendingApprovals] = useState(4);
-  // Starts at 0 (unlike livePendingApprovals' mock-data default of 4) since
-  // role_change_requests is real data from the start — RoleRequestsRoute's
-  // fetch on mount corrects this to the real pending count immediately.
+  // Both start at 0 — approvals and role_change_requests are both real
+  // Supabase data now (see AdminDashboardRoute/AdminApprovalsRoute and
+  // AdminRoleRequestsRoute), so whichever admin screen mounts first
+  // corrects this to the real pending count immediately via its own
+  // fetch-on-mount, same "0 until the real fetch resolves" convention as
+  // livePendingRoleRequests already used.
+  const [livePendingApprovals, setLivePendingApprovals] = useState(0);
   const [livePendingRoleRequests, setLivePendingRoleRequests] = useState(0);
   return (
     <AdminUiContext.Provider value={{

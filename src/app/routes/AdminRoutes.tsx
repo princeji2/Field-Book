@@ -11,12 +11,12 @@ import { Fade } from "./Fade";
 export function AdminDashboardRoute() {
   const onNavigate = useScreenNav();
   const { isGuest, profile } = useAuth();
-  const { livePendingApprovals, livePendingRoleRequests } = useAdminUi();
+  const { livePendingRoleRequests, setLivePendingApprovals } = useAdminUi();
   return (
     <Fade>
       <AdminDashboard
         onNavigate={onNavigate}
-        livePendingApprovals={livePendingApprovals}
+        onPendingApprovalsChange={setLivePendingApprovals}
         livePendingRoleRequests={livePendingRoleRequests}
         isGuest={isGuest}
         profile={profile}

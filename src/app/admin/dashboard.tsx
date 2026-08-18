@@ -1,19 +1,22 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Award, BarChart3, Check, ArrowRight, ChevronRight, CheckCircle2, AlertTriangle, Users, FileText, UserCheck } from "lucide-react";
+import { Award, BarChart3, Check, ArrowRight, ChevronRight, CheckCircle2, AlertTriangle, Users, FileText, UserCheck, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { F, M, dotGrid, type Screen, CertificateSeal, parseMetricNum, StatMetricNumber } from "../shared";
 import { AdminAppShell } from "./shell";
 import { signOutUser, type AuthedProfile } from "../../lib/auth";
+import { listApprovals, formatApprovalAge, type AdminApproval } from "../../lib/approvals";
 
 // ─── Admin Dashboard ──────────────────────────────────────────────────────────
-
-const ADMIN_PENDING_APPROVALS = [
-  { id:"ap1", org:"Prof. Linda Okonkwo",  event:"Indigenous Knowledge Forum",       dept:"Anthropology",  submitted:"2h ago",  type:"New event"         },
-  { id:"ap2", org:"Dr. Yusuf Amara",      event:"Pre-Med Study Group — Week 8",     dept:"Medical School", submitted:"4h ago",  type:"Recurring"         },
-  { id:"ap3", org:"Student Union Board",  event:"Winter Campus Market",             dept:"Student Affairs", submitted:"Yesterday", type:"New event"      },
-  { id:"ap4", org:"Dr. Mei-Ling Zhao",    event:"Computational Biology Bootcamp",   dept:"Bioinformatics", submitted:"Yesterday", type:"Capacity change" },
-];
+//
+// The "Needs Attention" panel's pending-approvals list is wired to real
+// Supabase data via lib/approvals.ts's listApprovals() (same call
+// ApprovalsScreen uses) — this screen fetches independently on mount
+// rather than relying on AdminApprovalsRoute having mounted first, same
+// "each admin screen owns its own real-data fetch" convention as
+// RoleRequestsScreen. Platform-wide metrics/activity feed below (users
+// registered, certs issued, etc.) have no backing tables yet
+// (registrations/attendance aren't modeled) and remain mock placeholders.
 
 const ADMIN_PLATFORM_METRICS = [
   { label:"Registered Users",   value:"4,218", sub:"+38 this week",    color:"#1E1B16" },
@@ -32,8 +35,11 @@ const ADMIN_ACTIVITY = [
   { id:"aa6", icon:CheckCircle2, text:"Environmental Policy Symposium — approved and published",   time:"Yesterday",  accent:"#2E6B4C" },
 ];
 
+// "Review Approvals" sub-label is filled in with the real pendingCount at
+// render time below (ql1.sub is a placeholder, replaced per-render) — the
+// rest have no backing table yet and stay static mock copy.
 const ADMIN_QUICK_LINKS = [
-  { id:"ql1", icon:CheckCircle2, label:"Review Approvals",       sub:"4 pending",            accent:"#E2A23B", bg:"rgba(226,162,59,0.08)" },
+  { id:"ql1", icon:CheckCircle2, label:"Review Approvals",       sub:"",                      accent:"#E2A23B", bg:"rgba(226,162,59,0.08)" },
   { id:"ql2", icon:Users,        label:"User Management",         sub:"4,218 accounts",       accent:"#1E1B16", bg:"rgba(30,27,22,0.05)"   },
   { id:"ql3", icon:FileText,     label:"Certificate Templates",   sub:"6 active templates",   accent:"#2E6B4C", bg:"rgba(46,107,76,0.07)"  },
   { id:"ql4", icon:BarChart3,    label:"Platform Analytics",      sub:"Usage this month",     accent:"#1E1B16", bg:"rgba(30,27,22,0.05)"   },
@@ -99,11 +105,50 @@ function SeismographTrace({ width, height, rowCount, rowDelay }: {
   );
 }
 
-export function AdminDashboard({ onNavigate, livePendingApprovals, livePendingRoleRequests, isGuest, profile }: { onNavigate: (s: Screen) => void; livePendingApprovals?: number; livePendingRoleRequests?: number; isGuest?: boolean; profile?: AuthedProfile | null }) {
-  const pendingCount = livePendingApprovals ?? ADMIN_PENDING_APPROVALS.length;
+export function AdminDashboard({
+  onNavigate,
+  onPendingApprovalsChange,
+  livePendingRoleRequests,
+  isGuest,
+  profile,
+}: {
+  onNavigate: (s: Screen) => void;
+  onPendingApprovalsChange?: (n: number) => void;
+  livePendingRoleRequests?: number;
+  isGuest?: boolean;
+  profile?: AuthedProfile | null;
+}) {
+  const [pendingApprovals, setPendingApprovals] = useState<AdminApproval[]>([]);
+  const [loadingApprovals, setLoadingApprovals] = useState(!isGuest);
+  const [approvalsError, setApprovalsError] = useState<string | null>(null);
+  const pendingCount = pendingApprovals.length;
   const activityRef  = useRef<HTMLDivElement>(null);
   const [activityWidth, setActivityWidth] = useState(0);
   const [reviewHover, setReviewHover] = useState(false);
+
+  const fetchPendingApprovals = useCallback(async () => {
+    setLoadingApprovals(true);
+    setApprovalsError(null);
+    const result = await listApprovals();
+    if (result.status === "error") {
+      setApprovalsError(result.message);
+      setLoadingApprovals(false);
+      return;
+    }
+    const pending = result.approvals.filter(a => a.status === "pending");
+    setPendingApprovals(pending);
+    setLoadingApprovals(false);
+    onPendingApprovalsChange?.(pending.length);
+  }, [onPendingApprovalsChange]);
+
+  useEffect(() => {
+    // Guest mode has no real Supabase session — approvals_select_admin's
+    // RLS would just return zero rows anyway, so skip the fetch and show
+    // an empty/"all caught up" panel, matching the isGuest handling
+    // elsewhere in the admin screens (UsersScreen, RoleRequestsScreen).
+    if (isGuest) { setLoadingApprovals(false); return; }
+    void fetchPendingApprovals();
+  }, [isGuest, fetchPendingApprovals]);
 
   useEffect(() => {
     if (!activityRef.current) return;
@@ -161,7 +206,12 @@ export function AdminDashboard({ onNavigate, livePendingApprovals, livePendingRo
             <div className="px-6 py-5 flex flex-col sm:flex-row items-start justify-between gap-6">
               <div className="flex-1 min-w-0 w-full">
                 <div className="flex items-center gap-3 mb-3">
-                  {pendingCount > 0 ? (
+                  {loadingApprovals ? (
+                    <span className="inline-flex items-center gap-[6px] px-2.5 py-[5px] rounded-full text-[8px] font-semibold tracking-[0.12em] uppercase"
+                      style={{ ...M, background:"rgba(30,27,22,0.05)", border:"1px solid rgba(30,27,22,0.12)", color:"#6B6355" }}>
+                      <RefreshCw size={9} strokeWidth={2} className="animate-spin" /> Loading
+                    </span>
+                  ) : pendingCount > 0 ? (
                     <>
                       <span className="inline-flex items-center gap-[6px] px-2.5 py-[5px] rounded-full text-[8px] font-semibold tracking-[0.12em] uppercase"
                         style={{ ...M, background:"#E2A23B", color:"#1E1B16" }}>
@@ -177,7 +227,25 @@ export function AdminDashboard({ onNavigate, livePendingApprovals, livePendingRo
                     </span>
                   )}
                 </div>
-                {pendingCount > 0 ? (
+                {loadingApprovals ? (
+                  <h2 className="text-[1.45rem] font-semibold text-[#1E1B16] leading-[1.2] mb-2" style={F}>
+                    Checking for pending approvals…
+                  </h2>
+                ) : approvalsError ? (
+                  <>
+                    <h2 className="text-[1.45rem] font-semibold text-[#1E1B16] leading-[1.2] mb-2" style={F}>
+                      Couldn't load approvals.
+                    </h2>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[11px] text-[#B5432E]" style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>{approvalsError}</span>
+                      <button type="button" onClick={() => void fetchPendingApprovals()}
+                        className="flex items-center gap-1 px-2 py-[3px] rounded-[5px] text-[10px] font-semibold border border-[#DCD4C2] text-[#1E1B16] hover:bg-[#F6F1E7] transition-colors"
+                        style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>
+                        <RefreshCw size={10} strokeWidth={1.75} /> Retry
+                      </button>
+                    </div>
+                  </>
+                ) : pendingCount > 0 ? (
                   <h2 className="text-[1.45rem] font-semibold text-[#1E1B16] leading-[1.2] mb-3" style={F}>
                     Needs Attention
                   </h2>
@@ -186,9 +254,9 @@ export function AdminDashboard({ onNavigate, livePendingApprovals, livePendingRo
                     Platform running smoothly.
                   </h2>
                 )}
-                {pendingCount > 0 && (
+                {!loadingApprovals && !approvalsError && pendingCount > 0 && (
                   <div className="space-y-2">
-                    {ADMIN_PENDING_APPROVALS.slice(0,3).map((ap, i) => (
+                    {pendingApprovals.slice(0,3).map((ap, i) => (
                       <motion.div key={ap.id}
                         className="flex items-start gap-3 py-2.5 border-b border-[#DCD4C2] last:border-none"
                         initial={{ opacity:0, x:-6 }} animate={{ opacity:1, x:0 }}
@@ -197,26 +265,26 @@ export function AdminDashboard({ onNavigate, livePendingApprovals, livePendingRo
                         <div className="flex-1 min-w-0">
                           <div className="text-[13px] font-medium text-[#1E1B16] leading-snug truncate"
                             style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>
-                            {ap.event}
+                            {ap.eventTitle}
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[9px] text-[#6B6355]" style={M}>{ap.org}</span>
+                            <span className="text-[9px] text-[#6B6355]" style={M}>{ap.organizerName}</span>
                             <span className="text-[#DCD4C2] text-xs">·</span>
-                            <span className="text-[9px] text-[#9C8E7E]" style={M}>{ap.dept}</span>
+                            <span className="text-[9px] text-[#9C8E7E]" style={M}>{ap.department ?? "—"}</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-[8px]" style={{ ...M, color:"#9C8E7E" }}>{ap.submitted}</span>
+                          <span className="text-[8px]" style={{ ...M, color:"#9C8E7E" }}>{formatApprovalAge(ap.submittedAt)}</span>
                           <span className="text-[8px] px-2 py-0.5 rounded-full border"
                             style={{ ...M, borderColor:"rgba(226,162,59,0.35)", color:"#8A5C00", background:"rgba(226,162,59,0.08)" }}>
-                            {ap.type}
+                            {ap.type === "new_event" ? "New event" : ap.type === "recurring" ? "Recurring" : ap.type === "capacity_change" ? "Capacity change" : "Edit"}
                           </span>
                         </div>
                       </motion.div>
                     ))}
-                    {ADMIN_PENDING_APPROVALS.length > 3 && (
+                    {pendingApprovals.length > 3 && (
                       <div className="pt-1">
-                        <span className="text-[10px] text-[#6B6355]" style={M}>+{ADMIN_PENDING_APPROVALS.length - 3} more pending</span>
+                        <span className="text-[10px] text-[#6B6355]" style={M}>+{pendingApprovals.length - 3} more pending</span>
                       </div>
                     )}
                   </div>
@@ -346,7 +414,11 @@ export function AdminDashboard({ onNavigate, livePendingApprovals, livePendingRo
                     <div className="flex-1 min-w-0">
                       <div className="text-[13px] font-medium text-[#1E1B16]"
                         style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>{ql.label}</div>
-                      <div className="text-[9px] text-[#9C8E7E]" style={M}>{ql.sub}</div>
+                      <div className="text-[9px] text-[#9C8E7E]" style={M}>
+                        {ql.id === "ql1"
+                          ? (loadingApprovals ? "Loading…" : pendingCount === 0 ? "All caught up" : `${pendingCount} pending`)
+                          : ql.sub}
+                      </div>
                     </div>
                     <ChevronRight size={13} strokeWidth={1.5} className="text-[#DCD4C2] group-hover:text-[#6B6355] transition-colors flex-shrink-0" />
                   </motion.button>
