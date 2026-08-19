@@ -11,3 +11,7 @@ dist
 
 # Supabase CLI local cache/state — not part of the project.
 supabase/.temp
+
+.next/
+node_modules/
+.env.local
