@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useId } from "react";
+import React, { useState, useEffect, useRef, useId, useCallback } from "react";
+import jsQR from "jsqr";
 import { motion, AnimatePresence } from "motion/react";
 import {
   QrCode, Award, BarChart3, Compass,
@@ -31,9 +32,7 @@ import {
   listStudentExploreEvents,
   getStudentEventById,
   getEventByCode,
-  getEventById,
   formatEventDate,
-  formatEventTimeRange,
 } from "../lib/events";
 
 // ─── Student Dashboard ────────────────────────────────────────────────────────
@@ -1780,6 +1779,23 @@ export function MyEventsScreen({
 }
 
 // ─── QR Scanner / Attendance screen ──────────────────────────────────────────
+
+/** Extracts the event code from a scanned QR value.
+ *  Organizer QRs encode: "fieldbook:attendance:{EVENT_CODE}"
+ *  Also accepts raw event codes directly (manual entry compatibility). */
+function parseQrValue(raw: string): string | null {
+  const trimmed = raw.trim();
+  const prefix = "fieldbook:attendance:";
+  if (trimmed.startsWith(prefix)) {
+    return trimmed.slice(prefix.length).toUpperCase() || null;
+  }
+  // Treat the raw value itself as a potential code if it looks like one
+  if (/^[A-Z0-9-]{4,}$/i.test(trimmed)) return trimmed.toUpperCase();
+  return null;
+}
+
+type ScanPhase = "permission" | "scanning" | "detected" | "recording" | "success" | "error";
+
 export function ScannerScreen({
   eventId,
   onNavigate,
@@ -1791,30 +1807,16 @@ export function ScannerScreen({
   isGuest?: boolean;
   profile?: AuthedProfile | null;
 }) {
-  // ── Load event from Supabase (when navigated with a specific eventId) ──
-  const [eventData, setEventData] = useState<EventRow | null>(null);
-  const [eventLoading, setEventLoading] = useState(!!eventId);
-
-  useEffect(() => {
-    async function load() {
-      if (!eventId) { setEventLoading(false); return; }
-      setEventLoading(true);
-      const result = await getEventById(eventId);
-      setEventLoading(false);
-      if (result.status === "success") setEventData(result.event);
-    }
-    void load();
-  }, [eventId]);
-
-  const [phase, setPhase] = useState<"scanning" | "recording" | "success" | "error">("scanning");
-  const [showManual, setShowManual] = useState(!eventId); // Show manual entry by default if no eventId
+  const [phase, setPhase] = useState<ScanPhase>("permission");
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [showManual, setShowManual] = useState(false);
   const [manualCode, setManualCode] = useState("");
   const [manualError, setManualError] = useState<string | null>(null);
   const [manualLoading, setManualLoading] = useState(false);
   const [confirmedEv, setConfirmedEv] = useState<EventRow | null>(null);
   const [attendanceError, setAttendanceError] = useState<string | null>(null);
+  const [detectedCode, setDetectedCode] = useState<string | null>(null);
 
-  // Capture attendance timestamp
   const [timestamp, setTimestamp] = useState(() => {
     const now = new Date();
     const h = now.getHours();
@@ -1823,24 +1825,122 @@ export function ScannerScreen({
     return `${h12}:${mm} ${h >= 12 ? "PM" : "AM"}`;
   });
 
-  /**
-   * Core attendance recording logic. Validates the event, checks status,
-   * then calls recordAttendance to persist to the database.
-   */
+  // Camera refs
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const rafRef = useRef<number>(0);
+  const scanningRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Camera lifecycle ──
+  const startCamera = useCallback(async () => {
+    setCameraError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 720 }, height: { ideal: 720 } },
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setPhase("scanning");
+      scanningRef.current = true;
+      requestScanFrame();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Camera access denied";
+      if (msg.includes("NotAllowed") || msg.includes("Permission")) {
+        setCameraError("Camera permission denied. Please allow camera access to scan QR codes.");
+      } else if (msg.includes("NotFound") || msg.includes("DevicesNotFound")) {
+        setCameraError("No camera found on this device.");
+      } else {
+        setCameraError(msg);
+      }
+      setPhase("permission");
+    }
+  }, []);
+
+  const stopCamera = useCallback(() => {
+    scanningRef.current = false;
+    cancelAnimationFrame(rafRef.current);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+  }, []);
+
+  // Start camera on mount
+  useEffect(() => {
+    void startCamera();
+    return () => stopCamera();
+  }, [startCamera, stopCamera]);
+
+  // ── Frame-by-frame QR scanning ──
+  function requestScanFrame() {
+    rafRef.current = requestAnimationFrame(scanFrame);
+  }
+
+  function scanFrame() {
+    if (!scanningRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || video.readyState < 2) {
+      requestScanFrame();
+      return;
+    }
+
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) { requestScanFrame(); return; }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const qr = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
+
+    if (qr && qr.data) {
+      const code = parseQrValue(qr.data);
+      if (code) {
+        scanningRef.current = false;
+        setDetectedCode(code);
+        setPhase("detected");
+        void processScannedCode(code);
+        return;
+      }
+    }
+
+    requestScanFrame();
+  }
+
+  // ── Process a decoded QR code ──
+  async function processScannedCode(code: string) {
+    const result = await getEventByCode(code);
+    if (result.status === "error") {
+      setAttendanceError("Invalid QR code. This doesn't match any active event.");
+      setPhase("error");
+      return;
+    }
+    await doRecordAttendance(result.event);
+  }
+
+  // ── Core attendance recording ──
   async function doRecordAttendance(event: EventRow) {
     if (!profile?.id) {
       setAttendanceError("You must be signed in to record attendance.");
+      setConfirmedEv(event);
       setPhase("error");
       return;
     }
 
-    // Validate event status — only published or live events accept attendance
     if (event.status !== "published" && event.status !== "live") {
       setAttendanceError(
         event.status === "completed"
           ? "This event has ended. Attendance can no longer be recorded."
           : "This event is not yet available for attendance."
       );
+      setConfirmedEv(event);
       setPhase("error");
       return;
     }
@@ -1851,7 +1951,6 @@ export function ScannerScreen({
     const result = await recordAttendance(profile.id, event.id);
 
     if (result.status === "success") {
-      // Update timestamp to the actual recording moment
       const now = new Date();
       const h = now.getHours();
       const mm = String(now.getMinutes()).padStart(2, "0");
@@ -1867,14 +1966,13 @@ export function ScannerScreen({
     }
   }
 
-  /**
-   * Manual code submission: looks up event by code, then records attendance.
-   */
+  // ── Manual code submission ──
   async function handleManualSubmit() {
     const code = manualCode.trim().toUpperCase();
     if (!code) return;
     setManualLoading(true);
     setManualError(null);
+    stopCamera();
 
     const result = await getEventByCode(code);
     setManualLoading(false);
@@ -1883,26 +1981,64 @@ export function ScannerScreen({
       setManualError(result.message);
       return;
     }
-
-    // Found a valid event — record attendance
     await doRecordAttendance(result.event);
   }
 
-  /**
-   * Tap-to-scan: uses the pre-loaded event (when navigated with eventId).
-   * In a real implementation this would be triggered by camera QR detection.
-   */
-  async function triggerScan() {
-    if (!eventData) return;
-    await doRecordAttendance(eventData);
+  // ── Image upload QR decode ──
+  async function handleImageUpload(file: File) {
+    if (!file.type.startsWith("image/")) return;
+    stopCamera();
+    setPhase("detected");
+    setDetectedCode(null);
+
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    await new Promise<void>((resolve) => { img.onload = () => resolve(); img.onerror = () => resolve(); });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      setAttendanceError("Could not process image. Try a different photo.");
+      setPhase("error");
+      URL.revokeObjectURL(img.src);
+      return;
+    }
+    ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(img.src);
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const qr = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
+
+    if (!qr || !qr.data) {
+      setAttendanceError("No QR code found in this image. Please try another photo.");
+      setPhase("error");
+      return;
+    }
+
+    const code = parseQrValue(qr.data);
+    if (!code) {
+      setAttendanceError("QR code detected but it's not a valid Fieldbook attendance code.");
+      setPhase("error");
+      return;
+    }
+
+    setDetectedCode(code);
+    await processScannedCode(code);
   }
 
-  // Display helpers for current event context
-  const displayTitle = eventData?.title ?? "Scan Event QR";
-  const displayDate = eventData ? formatEventDate(eventData.event_date) : "";
-  const displayTime = eventData ? formatEventTimeRange(eventData.start_time, eventData.end_time) : "";
+  // ── Try again / reset ──
+  function handleReset() {
+    setPhase("permission");
+    setAttendanceError(null);
+    setManualError(null);
+    setConfirmedEv(null);
+    setDetectedCode(null);
+    void startCamera();
+  }
 
-  // Display helpers for confirmed event (success/error phase)
+  // Display helpers
   const confirmedTitle = confirmedEv?.title ?? "";
   const confirmedVenue = confirmedEv?.venue ?? "Venue TBD";
   const confirmedDate = confirmedEv ? formatEventDate(confirmedEv.event_date) : "";
@@ -1911,371 +2047,348 @@ export function ScannerScreen({
   return (
     <div className="min-h-screen bg-[#F6F1E7] flex flex-col" style={dotGrid}>
 
-      {/* ── Top bar (minimal, no sidebar) ── */}
-      <header className="h-14 flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] flex items-center justify-between px-6">
+      {/* ── Top bar ── */}
+      <header className="h-14 flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] flex items-center justify-between px-4 sm:px-6">
         <div className="flex items-center gap-2.5">
           <BookMarked size={15} className="text-[#E2A23B]" strokeWidth={1.75} />
           <span className="text-base font-semibold text-[#1E1B16] tracking-tight" style={F}>Fieldbook</span>
         </div>
         <button
-          onClick={() => onNavigate("myevents")}
+          onClick={() => { stopCamera(); onNavigate("myevents"); }}
           className="flex items-center gap-1.5 text-sm text-[#6B6355] hover:text-[#1E1B16] transition-colors"
         >
           <ArrowLeft size={13} strokeWidth={1.5} />
-          Back to My Events
+          <span className="hidden sm:inline">Back to Events</span>
         </button>
       </header>
 
-      {/* ── Content ── */}
-      <div className="flex-1 flex items-center justify-center px-6 py-10">
-        {/* Loading state */}
-        {eventLoading && (
-          <div className="flex items-center justify-center">
-            <RefreshCw size={18} strokeWidth={1.5} className="animate-spin text-[#6B6355]" />
-          </div>
-        )}
+      {/* ── Main content ── */}
+      <div className="flex-1 flex flex-col items-center justify-start px-4 sm:px-6 py-5 sm:py-8 overflow-auto">
+        <div className="w-full max-w-[400px] flex flex-col items-center gap-5">
 
-        {!eventLoading && (
-        <AnimatePresence mode="wait">
+          <AnimatePresence mode="wait">
 
-          {/* ────── Scanning phase ────── */}
-          {phase === "scanning" && (
-            <motion.div
-              key="scanning"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
-              className="flex flex-col items-center gap-7 w-full max-w-xs"
-            >
-              {/* Context label */}
-              <div className="text-center space-y-1.5">
-                <p className="text-[8px] tracking-widest uppercase text-[#6B6355]" style={M}>Recording attendance</p>
-                {eventData && (
-                  <>
-                    <p className="text-base font-semibold text-[#1E1B16] leading-snug" style={F}>{displayTitle}</p>
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-[8px] text-[#6B6355]" style={M}>{displayDate} · {displayTime}</span>
-                    </div>
-                  </>
-                )}
-                {!eventData && (
-                  <p className="text-sm text-[#6B6355]">Scan the QR code or enter the event code below.</p>
-                )}
-              </div>
+            {/* ════ SCANNING / PERMISSION PHASE ════ */}
+            {(phase === "scanning" || phase === "permission") && (
+              <motion.div
+                key="scanner-view"
+                className="w-full flex flex-col items-center gap-4"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+              >
+                {/* Title */}
+                <div className="text-center">
+                  <p className="text-[9px] tracking-widest uppercase text-[#6B6355] mb-1" style={M}>Attendance Scanner</p>
+                  <h1 className="text-xl font-semibold text-[#1E1B16] leading-snug" style={F}>Scan Event QR</h1>
+                </div>
 
-              {/* Camera viewport (shown when navigated with a specific event) */}
-              {eventData && (
+                {/* Camera viewport */}
                 <div
-                  className="relative w-full max-w-[300px] aspect-square rounded-[10px] overflow-hidden mx-auto"
-                  style={{ background: "#0D0B09" }}
+                  className="relative w-full aspect-square rounded-[12px] overflow-hidden"
+                  style={{ background: "#0D0B09", maxWidth: 360 }}
                 >
-                  {/* Camera grain/texture */}
-                  <div
-                    className="absolute inset-0 opacity-[0.07] pointer-events-none"
-                    style={{
-                      backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 64 64' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E\")",
-                      backgroundSize: "64px 64px",
-                    }}
+                  {/* Live video feed */}
+                  <video
+                    ref={videoRef}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    playsInline
+                    muted
+                    autoPlay
                   />
-                  {/* Vignette */}
+                  {/* Hidden canvas for frame capture */}
+                  <canvas ref={canvasRef} className="hidden" />
+
+                  {/* Vignette overlay */}
                   <div
                     className="absolute inset-0 pointer-events-none"
-                    style={{ background: "radial-gradient(ellipse at center, transparent 35%, rgba(8,7,5,0.82) 100%)" }}
+                    style={{ background: "radial-gradient(ellipse at center, transparent 40%, rgba(8,7,5,0.7) 100%)" }}
                   />
 
-                  {/* Ghosted QR — simulates camera detecting the code */}
+                  {/* QR scanning frame (inner square) */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div style={{ opacity: 0.17, filter: "invert(1)" }}>
-                      <MockQR size={156} />
+                    <div className="relative" style={{ width: "68%", height: "68%" }}>
+                      {/* Corner brackets */}
+                      <div className="absolute top-0 left-0 w-8 h-8 border-t-[3px] border-l-[3px] border-[#E2A23B] rounded-tl-[3px]" />
+                      <div className="absolute top-0 right-0 w-8 h-8 border-t-[3px] border-r-[3px] border-[#E2A23B] rounded-tr-[3px]" />
+                      <div className="absolute bottom-0 left-0 w-8 h-8 border-b-[3px] border-l-[3px] border-[#E2A23B] rounded-bl-[3px]" />
+                      <div className="absolute bottom-0 right-0 w-8 h-8 border-b-[3px] border-r-[3px] border-[#E2A23B] rounded-br-[3px]" />
+
+                      {/* Animated scan line */}
+                      {phase === "scanning" && (
+                        <motion.div
+                          className="absolute left-2 right-2 pointer-events-none"
+                          style={{
+                            height: "2px",
+                            background: "linear-gradient(90deg, transparent 0%, #E2A23B 20%, #E2A23B 80%, transparent 100%)",
+                            boxShadow: "0 0 12px 4px rgba(226,162,59,0.3)",
+                          }}
+                          initial={{ top: "5%" }}
+                          animate={{ top: ["5%", "92%"] }}
+                          transition={{ duration: 2.2, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
+                        />
+                      )}
                     </div>
                   </div>
 
-                  {/* Scan frame: outer pulsing ring */}
-                  <motion.div
-                    className="absolute inset-6 border border-[#E2A23B]/10 pointer-events-none rounded-[2px]"
-                    animate={{ opacity: [0.3, 0.9, 0.3] }}
-                    transition={{ duration: 2.1, repeat: Infinity, ease: "easeInOut" }}
-                  />
+                  {/* Camera permission / error overlay */}
+                  {phase === "permission" && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#0D0B09]/90 z-10 px-6">
+                      {cameraError ? (
+                        <>
+                          <div className="w-12 h-12 rounded-full border border-[#DCD4C2]/30 flex items-center justify-center">
+                            <XCircle size={22} strokeWidth={1.5} className="text-[#DCD4C2]" />
+                          </div>
+                          <p className="text-sm text-[#DCD4C2] text-center leading-relaxed">{cameraError}</p>
+                          <button
+                            onClick={() => void startCamera()}
+                            className="px-4 py-2 text-[11px] font-medium text-[#F6F1E7] border border-[#DCD4C2]/40 rounded-[6px] hover:border-[#F6F1E7]/60 transition-colors"
+                          >
+                            Try Again
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw size={20} strokeWidth={1.5} className="animate-spin text-[#E2A23B]" />
+                          <p className="text-sm text-[#DCD4C2] text-center">Requesting camera access…</p>
+                        </>
+                      )}
+                    </div>
+                  )}
 
-                  {/* Corner brackets */}
-                  <div className="absolute top-6 left-6 w-7 h-7 border-t-[2.5px] border-l-[2.5px] border-[#E2A23B] rounded-tl-[2px]" />
-                  <div className="absolute top-6 right-6 w-7 h-7 border-t-[2.5px] border-r-[2.5px] border-[#E2A23B] rounded-tr-[2px]" />
-                  <div className="absolute bottom-6 left-6 w-7 h-7 border-b-[2.5px] border-l-[2.5px] border-[#E2A23B] rounded-bl-[2px]" />
-                  <div className="absolute bottom-6 right-6 w-7 h-7 border-b-[2.5px] border-r-[2.5px] border-[#E2A23B] rounded-br-[2px]" />
-
-                  {/* Animated scan line */}
-                  <motion.div
-                    className="absolute left-6 right-6 pointer-events-none"
-                    style={{
-                      height: "1.5px",
-                      background: "linear-gradient(90deg, transparent 0%, #E2A23B 22%, #E2A23B 78%, transparent 100%)",
-                      boxShadow: "0 0 10px 3px rgba(226,162,59,0.35)",
-                    }}
-                    initial={{ top: "14%" }}
-                    animate={{ top: ["14%", "82%"] }}
-                    transition={{ duration: 2.4, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
-                  />
-
-                  {/* Tap-to-scan affordance */}
-                  <button
-                    className="absolute inset-0 focus:outline-none"
-                    onClick={triggerScan}
-                    disabled={isGuest || !eventData}
-                    title={isGuest ? "Disabled in guest mode" : "Tap to record attendance"}
-                    aria-label="Record attendance for this event"
-                  />
-
-                  {/* Status bar */}
-                  <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1.5 pb-3 pointer-events-none">
-                    <motion.span
-                      className="w-1 h-1 rounded-full bg-[#E2A23B]"
-                      animate={{ opacity: [1, 0.25, 1] }}
-                      transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
-                    />
-                    <span className="text-[7px] text-[#E2A23B]/60 tracking-widest" style={M}>SCANNING</span>
-                  </div>
+                  {/* Bottom status bar */}
+                  {phase === "scanning" && (
+                    <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-2 pb-4 pointer-events-none">
+                      <motion.span
+                        className="w-1.5 h-1.5 rounded-full bg-[#E2A23B]"
+                        animate={{ opacity: [1, 0.3, 1] }}
+                        transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+                      />
+                      <span className="text-[8px] text-[#E2A23B]/70 tracking-widest uppercase" style={M}>Scanning</span>
+                    </div>
+                  )}
                 </div>
-              )}
 
-              {/* Instructions */}
-              <div className="text-center space-y-1.5">
-                {eventData ? (
-                  <>
-                    <p className="text-sm text-[#1E1B16]">Point the camera at the event QR code.</p>
-                    <p className="text-xs text-[#6B6355]">Or tap the viewport to record attendance now.</p>
-                  </>
-                ) : (
-                  <p className="text-sm text-[#1E1B16]">Enter the event attendance code below.</p>
-                )}
-              </div>
+                {/* Secondary actions below camera */}
+                <div className="w-full flex flex-col items-center gap-3">
 
-              {/* Manual entry */}
-              <div className="w-full space-y-3">
-                {eventData && (
-                  <div className="flex items-center gap-3">
+                  {/* Upload QR Image button */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/*"
+                    className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) void handleImageUpload(f); e.target.value = ""; }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-[#1E1B16] border border-[#1E1B16]/20 rounded-[7px] bg-[#FCFAF3] hover:border-[#1E1B16]/40 transition-colors"
+                  >
+                    <Upload size={13} strokeWidth={1.5} />
+                    Upload QR Image
+                  </button>
+
+                  {/* Manual code entry toggle */}
+                  <div className="flex items-center gap-3 w-full">
                     <div className="flex-1 h-px bg-[#DCD4C2]" />
                     <button
                       onClick={() => { setShowManual(v => !v); setManualError(null); setManualCode(""); }}
                       className="text-[9px] text-[#6B6355] hover:text-[#1E1B16] transition-colors flex-shrink-0"
                       style={M}
                     >
-                      {showManual ? "Hide manual entry" : "Enter code manually"}
+                      {showManual ? "Hide code entry" : "Enter code manually"}
                     </button>
                     <div className="flex-1 h-px bg-[#DCD4C2]" />
                   </div>
-                )}
 
-                <AnimatePresence>
-                  {showManual && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.22, ease: "easeOut" }}
-                      className="overflow-hidden"
-                    >
-                      <div className="pt-1 space-y-2.5">
-                        <div className="flex gap-2.5">
-                          <input
-                            type="text"
-                            value={manualCode}
-                            onChange={e => { setManualCode(e.target.value.toUpperCase()); setManualError(null); }}
-                            onKeyDown={e => e.key === "Enter" && handleManualSubmit()}
-                            placeholder="e.g. ENV-POL-2026-A1B2"
-                            className="flex-1 min-w-0 px-3.5 py-2.5 bg-[#FCFAF3] border border-[#DCD4C2] rounded-[7px] text-sm text-[#1E1B16] placeholder:text-[#DCD4C2] outline-none focus:border-[#1E1B16]/40 transition-colors"
-                            style={M}
-                          />
-                          <button
-                            onClick={handleManualSubmit}
-                            disabled={isGuest || manualLoading}
-                            title={isGuest ? "Disabled in guest mode" : undefined}
-                            aria-label="Submit event code"
-                            className="w-10 flex items-center justify-center bg-[#1E1B16] text-[#F6F1E7] rounded-[7px] border border-[#1E1B16] hover:bg-[#2E2A22] transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            {manualLoading
-                              ? <RefreshCw size={12} strokeWidth={2} className="animate-spin" />
-                              : <ArrowRight size={14} />}
-                          </button>
+                  {/* Manual entry field */}
+                  <AnimatePresence>
+                    {showManual && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2, ease: "easeOut" }}
+                        className="overflow-hidden w-full"
+                      >
+                        <div className="space-y-2.5 pt-1">
+                          <div className="flex gap-2.5">
+                            <input
+                              type="text"
+                              value={manualCode}
+                              onChange={e => { setManualCode(e.target.value.toUpperCase()); setManualError(null); }}
+                              onKeyDown={e => e.key === "Enter" && handleManualSubmit()}
+                              placeholder="e.g. ENV-POL-2026-A1B2"
+                              className="flex-1 min-w-0 px-3.5 py-2.5 bg-[#FCFAF3] border border-[#DCD4C2] rounded-[7px] text-sm text-[#1E1B16] placeholder:text-[#DCD4C2] outline-none focus:border-[#1E1B16]/40 transition-colors"
+                              style={M}
+                            />
+                            <button
+                              onClick={handleManualSubmit}
+                              disabled={isGuest || manualLoading}
+                              aria-label="Submit event code"
+                              className="w-10 flex items-center justify-center bg-[#1E1B16] text-[#F6F1E7] rounded-[7px] border border-[#1E1B16] hover:bg-[#2E2A22] transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              {manualLoading
+                                ? <RefreshCw size={12} strokeWidth={2} className="animate-spin" />
+                                : <ArrowRight size={14} />}
+                            </button>
+                          </div>
+                          {manualError && (
+                            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xs text-[#B5432E]">
+                              {manualError}
+                            </motion.p>
+                          )}
+                          <p className="text-[8px] text-[#DCD4C2] text-center" style={M}>
+                            Enter the event code shown on the attendance QR
+                          </p>
                         </div>
-                        {manualError && (
-                          <motion.p
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="text-xs text-[#B5432E]"
-                          >
-                            {manualError}
-                          </motion.p>
-                        )}
-                        <p className="text-[8px] text-[#DCD4C2] text-center" style={M}>
-                          Enter the event code shown on the attendance QR
-                        </p>
-                      </div>
-                    </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            )}
+
+            {/* ════ DETECTED / RECORDING PHASE ════ */}
+            {(phase === "detected" || phase === "recording") && (
+              <motion.div
+                key="processing"
+                className="flex flex-col items-center gap-5 py-16"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <motion.div
+                  className="w-14 h-14 rounded-full border-2 border-[#E2A23B] flex items-center justify-center"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
+                >
+                  <Scan size={22} strokeWidth={1.5} className="text-[#E2A23B]" />
+                </motion.div>
+                <div className="text-center">
+                  <p className="text-sm font-medium text-[#1E1B16]" style={F}>
+                    {phase === "detected" ? "QR Detected" : "Recording Attendance"}
+                  </p>
+                  <p className="text-xs text-[#6B6355] mt-1">
+                    {phase === "detected" ? "Validating event…" : "Saving your attendance…"}
+                  </p>
+                  {detectedCode && (
+                    <p className="text-[9px] text-[#6B6355] mt-2" style={M}>{detectedCode}</p>
                   )}
-                </AnimatePresence>
-              </div>
-            </motion.div>
-          )}
-
-          {/* ────── Recording phase (brief loading) ────── */}
-          {phase === "recording" && (
-            <motion.div
-              key="recording"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="flex flex-col items-center gap-4"
-            >
-              <RefreshCw size={20} strokeWidth={1.5} className="animate-spin text-[#E2A23B]" />
-              <p className="text-sm text-[#6B6355]">Recording attendance…</p>
-            </motion.div>
-          )}
-
-          {/* ────── Success phase ────── */}
-          {phase === "success" && confirmedEv && (
-            <motion.div
-              key="success"
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              className="w-full max-w-sm"
-            >
-              <div className="bg-[#FCFAF3] border border-[#1E1B16]/20 rounded-[8px] overflow-hidden">
-
-                {/* Card header */}
-                <div className="px-6 py-3 bg-[#F6F1E7] border-b border-[#DCD4C2] flex items-center justify-between">
-                  <span className="text-[8px] tracking-widest uppercase text-[#6B6355]" style={M}>
-                    Attendance Recorded
-                  </span>
-                  <span className="text-[8px] text-[#DCD4C2]" style={M}>{confirmedCode}</span>
                 </div>
+              </motion.div>
+            )}
 
-                {/* Card body */}
-                <div className="px-6 py-8 flex flex-col items-center gap-6">
-
-                  {/* Seal stamp */}
-                  <CertificateSeal size={100} rotate={-8} delay={0.2} />
-
-                  {/* Status */}
-                  <div className="text-center">
-                    <h2 className="text-[1.8rem] font-semibold text-[#1E1B16] leading-tight" style={F}>
-                      Attendance Recorded.
-                    </h2>
-                    <p className="text-sm text-[#6B6355] mt-1">Your attendance for this event has been saved.</p>
+            {/* ════ SUCCESS PHASE ════ */}
+            {phase === "success" && confirmedEv && (
+              <motion.div
+                key="success"
+                className="w-full"
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+              >
+                <div className="bg-[#FCFAF3] border border-[#1E1B16]/20 rounded-[8px] overflow-hidden">
+                  <div className="px-5 py-3 bg-[#F6F1E7] border-b border-[#DCD4C2] flex items-center justify-between">
+                    <span className="text-[8px] tracking-widest uppercase text-[#6B6355]" style={M}>Attendance Recorded</span>
+                    <span className="text-[8px] text-[#DCD4C2]" style={M}>{confirmedCode}</span>
                   </div>
-
-                  <div className="w-full h-px bg-[#DCD4C2]" />
-
-                  {/* Receipt rows */}
-                  <div className="w-full space-y-3">
-                    {[
-                      { label: "Event",   value: confirmedTitle,             serif: true  },
-                      { label: "Venue",   value: confirmedVenue,             serif: false },
-                      { label: "Time",    value: `${timestamp} · ${confirmedDate}`, serif: false, mono: true },
-                    ].map(({ label, value, serif, mono }) => (
-                      <div key={label} className="flex items-start justify-between gap-4">
-                        <span
-                          className="text-[8px] tracking-widest uppercase text-[#6B6355] flex-shrink-0 mt-0.5"
-                          style={M}
-                        >
-                          {label}
-                        </span>
-                        <span
-                          className="text-sm text-[#1E1B16] text-right leading-snug"
-                          style={serif ? F : (mono ? M : undefined)}
-                        >
-                          {value}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="w-full h-px bg-[#DCD4C2]" />
-
-                  {/* Done */}
-                  <button
-                    onClick={() => onNavigate("myevents")}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 border border-[#1E1B16]/25 rounded-[7px] text-sm font-medium text-[#1E1B16] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/40 transition-colors"
-                  >
-                    Done
-                    <Check size={13} strokeWidth={2.5} className="text-[#2E6B4C]" />
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* ────── Error phase ────── */}
-          {phase === "error" && (
-            <motion.div
-              key="error"
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              className="w-full max-w-sm"
-            >
-              <div className="bg-[#FCFAF3] border border-[#1E1B16]/20 rounded-[8px] overflow-hidden">
-
-                {/* Card header */}
-                <div className="px-6 py-3 bg-[#F6F1E7] border-b border-[#DCD4C2] flex items-center justify-between">
-                  <span className="text-[8px] tracking-widest uppercase text-[#B5432E]" style={M}>
-                    Attendance Not Recorded
-                  </span>
-                  {confirmedCode && <span className="text-[8px] text-[#DCD4C2]" style={M}>{confirmedCode}</span>}
-                </div>
-
-                {/* Card body */}
-                <div className="px-6 py-8 flex flex-col items-center gap-5">
-                  <div className="w-12 h-12 rounded-full border border-[#B5432E]/30 flex items-center justify-center">
-                    <AlertTriangle size={20} strokeWidth={1.5} className="text-[#B5432E]" />
-                  </div>
-
-                  <div className="text-center">
-                    <h2 className="text-lg font-semibold text-[#1E1B16] leading-snug" style={F}>
-                      Could not record attendance
-                    </h2>
-                    <p className="text-sm text-[#6B6355] mt-2">{attendanceError}</p>
-                  </div>
-
-                  {confirmedEv && (
-                    <>
-                      <div className="w-full h-px bg-[#DCD4C2]" />
-                      <div className="w-full space-y-2">
-                        <div className="flex items-start justify-between gap-4">
-                          <span className="text-[8px] tracking-widest uppercase text-[#6B6355]" style={M}>Event</span>
-                          <span className="text-sm text-[#1E1B16] text-right" style={F}>{confirmedTitle}</span>
+                  <div className="px-5 py-7 flex flex-col items-center gap-5">
+                    <CertificateSeal size={88} rotate={-8} delay={0.2} />
+                    <div className="text-center">
+                      <h2 className="text-2xl font-semibold text-[#1E1B16] leading-tight" style={F}>
+                        Attendance Recorded
+                      </h2>
+                      <p className="text-sm text-[#6B6355] mt-1">Your attendance has been saved.</p>
+                    </div>
+                    <div className="w-full h-px bg-[#DCD4C2]" />
+                    <div className="w-full space-y-2.5">
+                      {[
+                        { label: "Event", value: confirmedTitle, serif: true },
+                        { label: "Venue", value: confirmedVenue, serif: false },
+                        { label: "Time", value: `${timestamp} · ${confirmedDate}`, serif: false, mono: true },
+                      ].map(({ label, value, serif, mono }) => (
+                        <div key={label} className="flex items-start justify-between gap-4">
+                          <span className="text-[8px] tracking-widest uppercase text-[#6B6355] flex-shrink-0 mt-0.5" style={M}>{label}</span>
+                          <span className="text-sm text-[#1E1B16] text-right leading-snug" style={serif ? F : (mono ? M : undefined)}>{value}</span>
                         </div>
-                      </div>
-                    </>
-                  )}
-
-                  <div className="w-full h-px bg-[#DCD4C2]" />
-
-                  <div className="flex items-center gap-3 w-full">
-                    <button
-                      onClick={() => { setPhase("scanning"); setAttendanceError(null); setManualError(null); }}
-                      className="flex-1 py-2.5 border border-[#1E1B16]/25 rounded-[7px] text-sm font-medium text-[#1E1B16] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/40 transition-colors text-center"
-                    >
-                      Try Again
-                    </button>
+                      ))}
+                    </div>
+                    <div className="w-full h-px bg-[#DCD4C2]" />
                     <button
                       onClick={() => onNavigate("myevents")}
-                      className="flex-1 py-2.5 border border-[#DCD4C2] rounded-[7px] text-sm text-[#6B6355] hover:border-[#1E1B16]/30 transition-colors text-center"
+                      className="w-full flex items-center justify-center gap-2 py-2.5 border border-[#1E1B16]/25 rounded-[7px] text-sm font-medium text-[#1E1B16] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/40 transition-colors"
                     >
-                      Back to Events
+                      Done
+                      <Check size={13} strokeWidth={2.5} className="text-[#2E6B4C]" />
                     </button>
                   </div>
                 </div>
-              </div>
-            </motion.div>
-          )}
+              </motion.div>
+            )}
 
-        </AnimatePresence>
-        )}
+            {/* ════ ERROR PHASE ════ */}
+            {phase === "error" && (
+              <motion.div
+                key="error"
+                className="w-full"
+                initial={{ opacity: 0, y: 14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+              >
+                <div className="bg-[#FCFAF3] border border-[#1E1B16]/20 rounded-[8px] overflow-hidden">
+                  <div className="px-5 py-3 bg-[#F6F1E7] border-b border-[#DCD4C2] flex items-center justify-between">
+                    <span className="text-[8px] tracking-widest uppercase text-[#B5432E]" style={M}>Attendance Not Recorded</span>
+                    {confirmedCode && <span className="text-[8px] text-[#DCD4C2]" style={M}>{confirmedCode}</span>}
+                  </div>
+                  <div className="px-5 py-7 flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 rounded-full border border-[#B5432E]/30 flex items-center justify-center">
+                      <AlertTriangle size={20} strokeWidth={1.5} className="text-[#B5432E]" />
+                    </div>
+                    <div className="text-center">
+                      <h2 className="text-lg font-semibold text-[#1E1B16] leading-snug" style={F}>
+                        Could not record attendance
+                      </h2>
+                      <p className="text-sm text-[#6B6355] mt-2">{attendanceError}</p>
+                    </div>
+                    {confirmedEv && (
+                      <>
+                        <div className="w-full h-px bg-[#DCD4C2]" />
+                        <div className="w-full">
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-[8px] tracking-widest uppercase text-[#6B6355]" style={M}>Event</span>
+                            <span className="text-sm text-[#1E1B16] text-right" style={F}>{confirmedTitle}</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    <div className="w-full h-px bg-[#DCD4C2]" />
+                    <div className="flex items-center gap-3 w-full">
+                      <button
+                        onClick={handleReset}
+                        className="flex-1 py-2.5 border border-[#1E1B16]/25 rounded-[7px] text-sm font-medium text-[#1E1B16] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/40 transition-colors text-center"
+                      >
+                        Scan Again
+                      </button>
+                      <button
+                        onClick={() => onNavigate("myevents")}
+                        className="flex-1 py-2.5 border border-[#DCD4C2] rounded-[7px] text-sm text-[#6B6355] hover:border-[#1E1B16]/30 transition-colors text-center"
+                      >
+                        Back to Events
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   );
