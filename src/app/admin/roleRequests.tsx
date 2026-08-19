@@ -140,14 +140,14 @@ export function RoleRequestsScreen({
         toast(`${id} — coming soon`);
       }}
       topBarLeft={
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <button type="button" onClick={() => onNavigate("admin-dashboard")}
             className="flex items-center gap-1.5 text-[12px] text-[#6B6355] hover:text-[#1E1B16] transition-colors"
             style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
             <ArrowLeft size={13} strokeWidth={1.5} /> Dashboard
           </button>
-          <span className="text-[#DCD4C2] text-xs">/</span>
-          <span className="text-[13px] font-semibold text-[#1E1B16]" style={F}>Role Requests</span>
+          <span className="text-[#DCD4C2] text-xs hidden sm:inline">/</span>
+          <span className="text-[13px] font-semibold text-[#1E1B16] basis-full sm:basis-auto" style={F}>Role Requests</span>
           {pendingCount > 0 && (
             <span className="inline-flex items-center gap-1 px-2 py-[3px] rounded-full text-[8px] font-semibold"
               style={{ ...M, background:"#E2A23B", color:"#1E1B16" }}>
@@ -185,6 +185,44 @@ export function RoleRequestsScreen({
 
         {/* Column header + rows */}
         <div className="flex-1 overflow-x-auto overflow-y-auto">
+
+        {/* Loading / error / empty states — outside min-width to stay viewport-responsive */}
+        {loading && (
+          <div className="flex flex-col items-center justify-center h-48 gap-3 px-4">
+            <RefreshCw size={22} strokeWidth={1.5} className="text-[#9C8E7E] animate-spin" />
+            <span className="text-[12px] text-[#9C8E7E]" style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
+              Loading requests…
+            </span>
+          </div>
+        )}
+        {!loading && loadError && (
+          <div className="flex flex-col items-center justify-center h-48 gap-3 px-4">
+            <span className="text-[12px] text-[#B5432E] text-center max-w-[380px]"
+              style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
+              Couldn't load role requests: {loadError}
+            </span>
+            <button type="button" onClick={() => void fetchRequests()}
+              className="flex items-center gap-1.5 px-3 py-[6px] rounded-[6px] text-[11px] font-semibold border border-[#DCD4C2] text-[#1E1B16] hover:bg-[#F6F1E7] transition-colors"
+              style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
+              <RefreshCw size={11} strokeWidth={1.75} /> Retry
+            </button>
+          </div>
+        )}
+        <AnimatePresence initial={false}>
+          {!loading && !loadError && listed.length === 0 && (
+            <motion.div key="empty"
+              className="flex flex-col items-center justify-center h-48 gap-3 px-4 text-center"
+              initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}>
+              <UserCog size={28} strokeWidth={1} className="text-[#DCD4C2]" />
+              <span className="text-[12px] text-[#9C8E7E]" style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
+                {tab === "Pending" ? "Nothing pending — all caught up." : `No ${tab.toLowerCase()} requests yet.`}
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Scrollable data table */}
+        {!loading && !loadError && listed.length > 0 && (
         <div className="min-w-[720px]">
         <div className="flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] px-8 py-2.5 grid gap-4"
           style={{ gridTemplateColumns:"1fr 130px 130px 160px 210px" }}>
@@ -194,39 +232,8 @@ export function RoleRequestsScreen({
         </div>
 
         <div style={dotGrid}>
-          {loading && (
-            <div className="flex flex-col items-center justify-center h-48 gap-3">
-              <RefreshCw size={22} strokeWidth={1.5} className="text-[#9C8E7E] animate-spin" />
-              <span className="text-[12px] text-[#9C8E7E]" style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
-                Loading requests…
-              </span>
-            </div>
-          )}
-          {!loading && loadError && (
-            <div className="flex flex-col items-center justify-center h-48 gap-3">
-              <span className="text-[12px] text-[#B5432E] text-center max-w-[380px]"
-                style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
-                Couldn't load role requests: {loadError}
-              </span>
-              <button type="button" onClick={() => void fetchRequests()}
-                className="flex items-center gap-1.5 px-3 py-[6px] rounded-[6px] text-[11px] font-semibold border border-[#DCD4C2] text-[#1E1B16] hover:bg-[#F6F1E7] transition-colors"
-                style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
-                <RefreshCw size={11} strokeWidth={1.75} /> Retry
-              </button>
-            </div>
-          )}
           <AnimatePresence initial={false}>
-            {!loading && !loadError && listed.length === 0 && (
-              <motion.div key="empty"
-                className="flex flex-col items-center justify-center h-48 gap-3"
-                initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}>
-                <UserCog size={28} strokeWidth={1} className="text-[#DCD4C2]" />
-                <span className="text-[12px] text-[#9C8E7E]" style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
-                  {tab === "Pending" ? "Nothing pending — all caught up." : `No ${tab.toLowerCase()} requests yet.`}
-                </span>
-              </motion.div>
-            )}
-            {!loading && !loadError && listed.map((r, i) => {
+            {listed.map((r, i) => {
               const isRejecting = rejectingId === r.id;
               const isResolving = resolvingId === r.id;
               const currentUiRole = dbRoleToUserRole(r.currentRole);
@@ -353,6 +360,7 @@ export function RoleRequestsScreen({
           </AnimatePresence>
         </div>
         </div>{/* min-w */}
+        )}
         </div>{/* overflow */}
 
       </div>

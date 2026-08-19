@@ -209,25 +209,17 @@ export function AdminAppShell({
               {topBarActions}
             </div>
           )}
-          {/* Guest badge */}
-          {isGuest && (
-            <div className="order-4 flex items-center gap-1.5 px-2.5 py-[5px] rounded-full border border-[#DCD4C2] flex-shrink-0"
-              style={{ background:"rgba(107,99,85,0.08)" }}>
-              <Eye size={10} strokeWidth={1.75} style={{ color:"#6B6355" }} />
-              <span className="text-[9px] font-medium tracking-wide" style={{ ...M, color:"#6B6355" }}>Viewing as Guest</span>
-            </div>
-          )}
           {/* Bell */}
           <button type="button"
             onClick={() => onNav?.("admin-notifs")}
-            className="order-5 relative p-1 flex-shrink-0" aria-label="Notifications">
+            className="order-4 relative p-1 flex-shrink-0 sm:order-5" aria-label="Notifications">
             <Bell size={15} strokeWidth={1.5} color="#6B6355" />
             {notifCount > 0 && (
               <span className="absolute top-0 right-0 w-[7px] h-[7px] rounded-full border border-[#F6F1E7]" style={{ background:"#E2A23B" }} />
             )}
           </button>
           {/* Avatar — opens profile menu */}
-          <div className="order-6 relative flex-shrink-0">
+          <div className="order-5 relative flex-shrink-0 sm:order-6">
             <button
               ref={avatarRef}
               type="button"
@@ -357,6 +349,14 @@ export function AdminAppShell({
               )}
             </AnimatePresence>
           </div>
+          {/* Guest badge — on mobile wraps to second row alongside page title */}
+          {isGuest && (
+            <div className="order-[8] flex items-center gap-1.5 px-2.5 py-[5px] rounded-full border border-[#DCD4C2] flex-shrink-0 sm:order-4"
+              style={{ background:"rgba(107,99,85,0.08)" }}>
+              <Eye size={10} strokeWidth={1.75} style={{ color:"#6B6355" }} />
+              <span className="text-[9px] font-medium tracking-wide" style={{ ...M, color:"#6B6355" }}>Viewing as Guest</span>
+            </div>
+          )}
         </header>
 
       {/* Page content */}
