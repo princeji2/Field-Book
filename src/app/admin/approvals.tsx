@@ -413,9 +413,9 @@ export function ApprovalsScreen({ onNavigate, onPendingChange, isGuest, profile 
               })}
             </AnimatePresence>
           </div>
-          </div>{/* min-w */}
+          </div>
           )}
-          </div>{/* overflow-auto */}
+          </div>
         </div>
 
         {/* ── Side panel ── */}

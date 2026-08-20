@@ -359,9 +359,9 @@ export function RoleRequestsScreen({
             })}
           </AnimatePresence>
         </div>
-        </div>{/* min-w */}
+        </div>
         )}
-        </div>{/* overflow */}
+        </div>
 
       </div>
     </AdminAppShell>

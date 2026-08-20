@@ -511,13 +511,13 @@ export function UsersScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: 
         toast(`${id} — coming soon`);
       }}
       topBarLeft={
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <button type="button" onClick={() => onNavigate("admin-dashboard")}
             className="flex items-center gap-1.5 text-[12px] text-[#6B6355] hover:text-[#1E1B16] transition-colors"
             style={{ fontFamily:"'Public Sans',system-ui,sans-serif" }}>
             <ArrowLeft size={13} strokeWidth={1.5} /> Dashboard
           </button>
-          <span className="text-[#DCD4C2] text-xs">/</span>
+          <span className="text-[#DCD4C2] text-xs hidden sm:inline">/</span>
           <span className="text-[13px] font-semibold text-[#1E1B16]" style={F}>Users</span>
           <span className="text-[9px] px-2 py-[3px] rounded-full border border-[#DCD4C2] text-[#6B6355]"
             style={M}>{users.length} total</span>
@@ -616,7 +616,7 @@ export function UsersScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: 
 
         {/* ── Column headers + rows — horizontally scrollable on small screens ── */}
         <div className="flex-1 overflow-auto">
-        <div className="min-w-[780px]">
+        <div className="min-w-[900px]">
         {/* Column headers */}
         <div className="flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] px-8 py-2.5
           grid gap-4 items-center"

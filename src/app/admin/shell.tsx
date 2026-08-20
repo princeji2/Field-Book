@@ -182,20 +182,22 @@ export function AdminAppShell({
         </div>
       </>}>
       {/* ── Top bar ── */}
-      <header className="min-h-14 flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:h-14 sm:py-0 sm:px-8">
+      <header className="flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] px-4 py-2 sm:px-8 sm:py-0 sm:h-14">
+        {/* Row 1: hamburger + title + bell + avatar */}
+        <div className="flex items-center gap-3 min-h-[40px] sm:min-h-[56px]">
           {isMobile && (
             <button
               type="button"
               onClick={() => setMobileOpen(v => !v)}
               aria-label="Open navigation menu"
-              className="order-1 flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-[6px] text-[#1E1B16] hover:bg-[#EDE7DA] transition-colors">
+              className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-[6px] text-[#1E1B16] hover:bg-[#EDE7DA] transition-colors">
               <Menu size={14} strokeWidth={1.75} />
             </button>
           )}
-          <div className="order-2 flex-1 min-w-0">
+          <div className="flex-1 min-w-0 overflow-hidden">
             {topBarLeft ?? (
               <div>
-                <p className="text-[13px] font-semibold text-[#1E1B16] leading-tight" style={F}>
+                <p className="text-[13px] font-semibold text-[#1E1B16] leading-tight truncate" style={F}>
                   {greeting}, {adminName.split(" ")[0]}.
                 </p>
                 <p className="text-[9px] mt-[1px]" style={{ ...M, color:"#9C8E7E" }}>
@@ -204,22 +206,31 @@ export function AdminAppShell({
               </div>
             )}
           </div>
-          {topBarActions && (
-            <div className="order-3 w-full sm:w-auto flex items-center gap-2 flex-shrink-0">
+          {/* Guest badge — inline on desktop, below on mobile */}
+          {isGuest && !isMobile && (
+            <div className="flex items-center gap-1.5 px-2.5 py-[5px] rounded-full border border-[#DCD4C2] flex-shrink-0"
+              style={{ background:"rgba(107,99,85,0.08)" }}>
+              <Eye size={10} strokeWidth={1.75} style={{ color:"#6B6355" }} />
+              <span className="text-[9px] font-medium tracking-wide" style={{ ...M, color:"#6B6355" }}>Viewing as Guest</span>
+            </div>
+          )}
+          {/* Top bar actions — desktop only inline */}
+          {!isMobile && topBarActions && (
+            <div className="flex items-center gap-2 flex-shrink-0">
               {topBarActions}
             </div>
           )}
           {/* Bell */}
           <button type="button"
             onClick={() => onNav?.("admin-notifs")}
-            className="order-4 relative p-1 flex-shrink-0 sm:order-5" aria-label="Notifications">
+            className="relative p-1 flex-shrink-0" aria-label="Notifications">
             <Bell size={15} strokeWidth={1.5} color="#6B6355" />
             {notifCount > 0 && (
               <span className="absolute top-0 right-0 w-[7px] h-[7px] rounded-full border border-[#F6F1E7]" style={{ background:"#E2A23B" }} />
             )}
           </button>
           {/* Avatar — opens profile menu */}
-          <div className="order-5 relative flex-shrink-0 sm:order-6">
+          <div className="relative flex-shrink-0">
             <button
               ref={avatarRef}
               type="button"
@@ -349,15 +360,25 @@ export function AdminAppShell({
               )}
             </AnimatePresence>
           </div>
-          {/* Guest badge — on mobile wraps to second row alongside page title */}
-          {isGuest && (
-            <div className="order-[8] flex items-center gap-1.5 px-2.5 py-[5px] rounded-full border border-[#DCD4C2] flex-shrink-0 sm:order-4"
-              style={{ background:"rgba(107,99,85,0.08)" }}>
-              <Eye size={10} strokeWidth={1.75} style={{ color:"#6B6355" }} />
-              <span className="text-[9px] font-medium tracking-wide" style={{ ...M, color:"#6B6355" }}>Viewing as Guest</span>
-            </div>
-          )}
-        </header>
+        </div>
+        {/* Row 2: guest badge + topBarActions — only shown on mobile when needed */}
+        {isMobile && (isGuest || topBarActions) && (
+          <div className="flex items-center gap-2 pb-2 pt-1 flex-wrap">
+            {isGuest && (
+              <div className="flex items-center gap-1.5 px-2.5 py-[5px] rounded-full border border-[#DCD4C2] flex-shrink-0"
+                style={{ background:"rgba(107,99,85,0.08)" }}>
+                <Eye size={10} strokeWidth={1.75} style={{ color:"#6B6355" }} />
+                <span className="text-[9px] font-medium tracking-wide" style={{ ...M, color:"#6B6355" }}>Viewing as Guest</span>
+              </div>
+            )}
+            {topBarActions && (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {topBarActions}
+              </div>
+            )}
+          </div>
+        )}
+      </header>
 
       {/* Page content */}
       {children}
