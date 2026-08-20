@@ -19,7 +19,8 @@ RUN mvn -B dependency:go-offline -DskipTests || true
 
 # Copy source and build the fat jar
 COPY src ./src
-RUN mvn -B -DskipTests package
+RUN mvn -B -DskipTests package && \
+    mv target/certificate-service-*.jar target/app.jar
 
 # ── Runtime stage ────────────────────────────────────────────────────────
 FROM eclipse-temurin:17-jre-alpine
@@ -29,7 +30,8 @@ WORKDIR /app
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # Copy the built jar from the build stage
-COPY --from=build /build/target/certificate-service-0.1.0.jar app.jar
+# Copy the built jar from the build stage (renamed in build stage for stability)
+COPY --from=build /build/target/app.jar app.jar
 
 # Switch to non-root user
 USER appuser
