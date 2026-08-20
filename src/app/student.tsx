@@ -1354,15 +1354,88 @@ function UpcomingRow({
   isGuest?: boolean;
 }) {
   return (
-    <div className={`bg-[#FCFAF3] border rounded-[8px] px-5 py-4 flex items-center gap-5 transition-colors ${ev.checkInOpen && !checkedIn ? "border-[#2E6B4C]/40" : "border-[#1E1B16]/20"}`}>
-      {/* Live pulse */}
-      {ev.checkInOpen && !checkedIn && (
-        <span className="w-2 h-2 rounded-full bg-[#2E6B4C] flex-shrink-0 ring-4 ring-[#2E6B4C]/15" />
-      )}
+    <div className={`bg-[#FCFAF3] border rounded-[8px] px-5 py-4 transition-colors ${ev.checkInOpen && !checkedIn ? "border-[#2E6B4C]/40" : "border-[#1E1B16]/20"}`}>
+      {/* Desktop: horizontal row */}
+      <div className="hidden sm:flex items-center gap-5">
+        {/* Live pulse */}
+        {ev.checkInOpen && !checkedIn && (
+          <span className="w-2 h-2 rounded-full bg-[#2E6B4C] flex-shrink-0 ring-4 ring-[#2E6B4C]/15" />
+        )}
 
-      {/* Info */}
-      <div className="flex-1 min-w-0 space-y-1.5">
+        {/* Info */}
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[8px] tracking-widest uppercase text-[#6B6355] px-2 py-0.5 border border-[#DCD4C2] rounded-full" style={M}>
+              {ev.category}
+            </span>
+            {ev.checkInOpen && (
+              <span className="text-[8px] font-medium text-[#2E6B4C]" style={M}>Check-in open now</span>
+            )}
+          </div>
+          <h3 className="text-sm font-semibold text-[#1E1B16] leading-snug" style={F}>{ev.title}</h3>
+          <EventInfoMeta ev={ev} />
+        </div>
+
+        {/* Code (hidden on small) */}
+        <div className="hidden xl:block w-28 flex-shrink-0 space-y-0.5">
+          <div className="text-[8px] text-[#DCD4C2]" style={M}>Event code</div>
+          <div className="text-[9px] text-[#6B6355]" style={M}>{ev.code}</div>
+        </div>
+
+        {/* Action */}
+        <div className="flex-shrink-0 min-w-[120px] flex justify-end">
+          <AnimatePresence mode="wait">
+            {checkedIn ? (
+              <motion.div
+                key="checked"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                className="flex items-center gap-1.5"
+              >
+                <Check size={13} strokeWidth={2.5} className="text-[#2E6B4C]" />
+                <span className="text-xs font-medium text-[#2E6B4C]">Checked in</span>
+              </motion.div>
+            ) : ev.checkInOpen ? (
+              <motion.button
+                key="check-in"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onCheckIn}
+                disabled={isGuest}
+                title={isGuest ? "Disabled in guest mode" : undefined}
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#E2A23B] text-[#1E1B16] text-xs font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <QrCode size={12} strokeWidth={1.5} />
+                Check In
+              </motion.button>
+            ) : (
+              <motion.div
+                key="locked"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-right space-y-1"
+              >
+                <div className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#F6F1E7] border border-[#DCD4C2] rounded-[7px] cursor-not-allowed">
+                  <QrCode size={11} strokeWidth={1.5} className="text-[#DCD4C2]" />
+                  <span className="text-xs text-[#DCD4C2]">Check In</span>
+                </div>
+                <div className="text-[8px] text-[#DCD4C2] text-right" style={M}>Opens {ev.checkInOpensAt}</div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
+      {/* Mobile: stacked layout */}
+      <div className="sm:hidden space-y-3">
+        {/* Category + live indicator */}
         <div className="flex items-center gap-2">
+          {ev.checkInOpen && !checkedIn && (
+            <span className="w-2 h-2 rounded-full bg-[#2E6B4C] flex-shrink-0 ring-4 ring-[#2E6B4C]/15" />
+          )}
           <span className="text-[8px] tracking-widest uppercase text-[#6B6355] px-2 py-0.5 border border-[#DCD4C2] rounded-full" style={M}>
             {ev.category}
           </span>
@@ -1370,60 +1443,58 @@ function UpcomingRow({
             <span className="text-[8px] font-medium text-[#2E6B4C]" style={M}>Check-in open now</span>
           )}
         </div>
+
+        {/* Title */}
         <h3 className="text-sm font-semibold text-[#1E1B16] leading-snug" style={F}>{ev.title}</h3>
+
+        {/* Event meta */}
         <EventInfoMeta ev={ev} />
-      </div>
 
-      {/* Code (hidden on small) */}
-      <div className="hidden xl:block w-28 flex-shrink-0 space-y-0.5">
-        <div className="text-[8px] text-[#DCD4C2]" style={M}>Event code</div>
-        <div className="text-[9px] text-[#6B6355]" style={M}>{ev.code}</div>
-      </div>
-
-      {/* Action */}
-      <div className="flex-shrink-0 min-w-[120px] flex justify-end">
-        <AnimatePresence mode="wait">
-          {checkedIn ? (
-            <motion.div
-              key="checked"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
-              className="flex items-center gap-1.5"
-            >
-              <Check size={13} strokeWidth={2.5} className="text-[#2E6B4C]" />
-              <span className="text-xs font-medium text-[#2E6B4C]">Checked in</span>
-            </motion.div>
-          ) : ev.checkInOpen ? (
-            <motion.button
-              key="check-in"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={onCheckIn}
-              disabled={isGuest}
-              title={isGuest ? "Disabled in guest mode" : undefined}
-              className="flex items-center gap-1.5 px-4 py-2 bg-[#E2A23B] text-[#1E1B16] text-xs font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <QrCode size={12} strokeWidth={1.5} />
-              Check In
-            </motion.button>
-          ) : (
-            <motion.div
-              key="locked"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="text-right space-y-1"
-            >
-              <div className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#F6F1E7] border border-[#DCD4C2] rounded-[7px] cursor-not-allowed">
-                <QrCode size={11} strokeWidth={1.5} className="text-[#DCD4C2]" />
-                <span className="text-xs text-[#DCD4C2]">Check In</span>
-              </div>
-              <div className="text-[8px] text-[#DCD4C2] text-right" style={M}>Opens {ev.checkInOpensAt}</div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/* Action */}
+        <div className="pt-2 border-t border-[#DCD4C2]">
+          <AnimatePresence mode="wait">
+            {checkedIn ? (
+              <motion.div
+                key="checked-m"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+                className="flex items-center gap-1.5"
+              >
+                <Check size={13} strokeWidth={2.5} className="text-[#2E6B4C]" />
+                <span className="text-xs font-medium text-[#2E6B4C]">Checked in</span>
+              </motion.div>
+            ) : ev.checkInOpen ? (
+              <motion.button
+                key="check-in-m"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onCheckIn}
+                disabled={isGuest}
+                title={isGuest ? "Disabled in guest mode" : undefined}
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#E2A23B] text-[#1E1B16] text-xs font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <QrCode size={12} strokeWidth={1.5} />
+                Check In
+              </motion.button>
+            ) : (
+              <motion.div
+                key="locked-m"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-1"
+              >
+                <div className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#F6F1E7] border border-[#DCD4C2] rounded-[7px] cursor-not-allowed w-fit">
+                  <QrCode size={11} strokeWidth={1.5} className="text-[#DCD4C2]" />
+                  <span className="text-xs text-[#DCD4C2]">Check In</span>
+                </div>
+                <div className="text-[8px] text-[#DCD4C2]" style={M}>Opens {ev.checkInOpensAt}</div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     </div>
   );
@@ -1459,76 +1530,78 @@ function PastRow({
   }
 
   return (
-    <div className="bg-[#FCFAF3] border border-[#1E1B16]/20 rounded-[8px] px-5 py-4 flex items-center gap-5">
-      {/* Info */}
-      <div className="flex-1 min-w-0 space-y-1.5">
-        <div className="flex items-center gap-2">
-          <span className="text-[8px] tracking-widest uppercase text-[#6B6355] px-2 py-0.5 border border-[#DCD4C2] rounded-full" style={M}>
-            {ev.category}
-          </span>
+    <div className="bg-[#FCFAF3] border border-[#1E1B16]/20 rounded-[8px] px-5 py-4">
+      {/* Desktop: horizontal row */}
+      <div className="hidden sm:flex items-center gap-5">
+        {/* Info */}
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[8px] tracking-widest uppercase text-[#6B6355] px-2 py-0.5 border border-[#DCD4C2] rounded-full" style={M}>
+              {ev.category}
+            </span>
+          </div>
+          <h3 className="text-sm font-semibold text-[#1E1B16] leading-snug" style={F}>{ev.title}</h3>
+          <EventInfoMeta ev={ev} />
         </div>
-        <h3 className="text-sm font-semibold text-[#1E1B16] leading-snug" style={F}>{ev.title}</h3>
-        <EventInfoMeta ev={ev} />
-      </div>
 
-      {/* Status badge */}
-      <div className="w-24 flex-shrink-0 flex justify-center">
-        {attended ? (
-          <span className="px-2.5 py-1 bg-[#2E6B4C] text-[#F6F1E7] text-[8px] tracking-wide rounded-full" style={M}>
-            Attended
-          </span>
-        ) : (
-          <span className="px-2.5 py-1 border border-[#B5432E] text-[#B5432E] text-[8px] tracking-wide rounded-full" style={M}>
-            Missed
-          </span>
-        )}
-      </div>
+        {/* Status badge */}
+        <div className="w-24 flex-shrink-0 flex justify-center">
+          {attended ? (
+            <span className="px-2.5 py-1 bg-[#2E6B4C] text-[#F6F1E7] text-[8px] tracking-wide rounded-full" style={M}>
+              Attended
+            </span>
+          ) : (
+            <span className="px-2.5 py-1 border border-[#B5432E] text-[#B5432E] text-[8px] tracking-wide rounded-full" style={M}>
+              Missed
+            </span>
+          )}
+        </div>
 
-      {/* Certificate action */}
-      <div className="w-48 flex-shrink-0 flex flex-col items-end gap-1">
-        {!attended ? (
-          <span className="text-base text-[#DCD4C2]">—</span>
-        ) : (
-          <AnimatePresence mode="wait">
-            {certGotten ? (
-              <motion.a
-                key="cert-done"
-                href={certUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                initial={{ opacity: 0, scale: 0.85 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.25, ease: "easeOut" }}
-                className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
-                title={certUrl ? "View / download certificate" : undefined}
-              >
-                <CertificateSeal size={44} rotate={-9} delay={0.1} />
-                <div className="space-y-0.5">
-                  <div className="text-[8px] font-medium text-[#2E6B4C]" style={M}>Certificate Issued</div>
-                  <div className="text-[8px] text-[#6B6355]" style={M}>{ev.code}</div>
-                </div>
-              </motion.a>
-            ) : status === "loading" ? (
-              <motion.div
-                key="cert-loading"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex items-center gap-1.5 px-4 py-2 border border-[#1E1B16]/25 text-xs text-[#6B6355] rounded-[7px]"
-              >
-                <RefreshCw size={12} className="animate-spin" />
-                Generating…
-              </motion.div>
-            ) : (
-              <motion.button
-                key="cert-btn"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={handleClick}
-                disabled={isGuest}
-                title={isGuest ? "Disabled in guest mode" : undefined}
-                className="flex items-center gap-1.5 px-4 py-2 border border-[#1E1B16]/25 text-xs text-[#1E1B16] rounded-[7px] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        {/* Certificate action */}
+        <div className="w-48 flex-shrink-0 flex flex-col items-end gap-1">
+          {!attended ? (
+            <span className="text-base text-[#DCD4C2]">—</span>
+          ) : (
+            <AnimatePresence mode="wait">
+              {certGotten ? (
+                <motion.a
+                  key="cert-done"
+                  href={certUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
+                  title={certUrl ? "View / download certificate" : undefined}
+                >
+                  <CertificateSeal size={44} rotate={-9} delay={0.1} />
+                  <div className="space-y-0.5">
+                    <div className="text-[8px] font-medium text-[#2E6B4C]" style={M}>Certificate Issued</div>
+                    <div className="text-[8px] text-[#6B6355]" style={M}>{ev.code}</div>
+                  </div>
+                </motion.a>
+              ) : status === "loading" ? (
+                <motion.div
+                  key="cert-loading"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex items-center gap-1.5 px-4 py-2 border border-[#1E1B16]/25 text-xs text-[#6B6355] rounded-[7px]"
+                >
+                  <RefreshCw size={12} className="animate-spin" />
+                  Generating…
+                </motion.div>
+              ) : (
+                <motion.button
+                  key="cert-btn"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={handleClick}
+                  disabled={isGuest}
+                  title={isGuest ? "Disabled in guest mode" : undefined}
+                  className="flex items-center gap-1.5 px-4 py-2 border border-[#1E1B16]/25 text-xs text-[#1E1B16] rounded-[7px] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Award size={12} strokeWidth={1.5} className="text-[#E2A23B]" />
                 Get Certificate
@@ -1545,6 +1618,99 @@ function PastRow({
           >
             {errorMessage}
           </motion.p>
+        )}
+      </div>
+      </div>
+
+      {/* Mobile: stacked layout */}
+      <div className="sm:hidden space-y-3">
+        {/* Category + status row */}
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[8px] tracking-widest uppercase text-[#6B6355] px-2 py-0.5 border border-[#DCD4C2] rounded-full" style={M}>
+            {ev.category}
+          </span>
+          {attended ? (
+            <span className="px-2.5 py-1 bg-[#2E6B4C] text-[#F6F1E7] text-[8px] tracking-wide rounded-full" style={M}>
+              Attended
+            </span>
+          ) : (
+            <span className="px-2.5 py-1 border border-[#B5432E] text-[#B5432E] text-[8px] tracking-wide rounded-full" style={M}>
+              Missed
+            </span>
+          )}
+        </div>
+
+        {/* Title */}
+        <h3 className="text-sm font-semibold text-[#1E1B16] leading-snug" style={F}>{ev.title}</h3>
+
+        {/* Event meta */}
+        <EventInfoMeta ev={ev} />
+
+        {/* Certificate action */}
+        {attended && (
+          <div className="pt-2 border-t border-[#DCD4C2]">
+            <AnimatePresence mode="wait">
+              {certGotten ? (
+                <motion.a
+                  key="cert-done-m"
+                  href={certUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.25, ease: "easeOut" }}
+                  className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
+                  title={certUrl ? "View / download certificate" : undefined}
+                >
+                  <CertificateSeal size={40} rotate={-9} delay={0.1} />
+                  <div className="space-y-0.5">
+                    <div className="text-[8px] font-medium text-[#2E6B4C]" style={M}>Certificate Issued</div>
+                    <div className="text-[8px] text-[#6B6355]" style={M}>{ev.code}</div>
+                  </div>
+                </motion.a>
+              ) : status === "loading" ? (
+                <motion.div
+                  key="cert-loading-m"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex items-center gap-1.5 px-4 py-2 border border-[#1E1B16]/25 text-xs text-[#6B6355] rounded-[7px] w-fit"
+                >
+                  <RefreshCw size={12} className="animate-spin" />
+                  Generating…
+                </motion.div>
+              ) : (
+                <motion.button
+                  key="cert-btn-m"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={handleClick}
+                  disabled={isGuest}
+                  title={isGuest ? "Disabled in guest mode" : undefined}
+                  className="flex items-center gap-1.5 px-4 py-2 border border-[#1E1B16]/25 text-xs text-[#1E1B16] rounded-[7px] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Award size={12} strokeWidth={1.5} className="text-[#E2A23B]" />
+                  Get Certificate
+                </motion.button>
+              )}
+            </AnimatePresence>
+            {status === "error" && errorMessage && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-[9px] text-[#B5432E] leading-snug mt-1.5"
+                style={M}
+              >
+                {errorMessage}
+              </motion.p>
+            )}
+          </div>
+        )}
+        {!attended && (
+          <div className="pt-2 border-t border-[#DCD4C2]">
+            <span className="text-[9px] text-[#DCD4C2]" style={M}>No certificate (missed)</span>
+          </div>
         )}
       </div>
     </div>
@@ -1620,14 +1786,14 @@ export function MyEventsScreen({
         <div className="px-4 sm:px-8 py-7 space-y-6">
 
           {/* ── Page header ── */}
-          <div className="flex items-start justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div>
               <p className="text-[8px] tracking-widest uppercase text-[#6B6355] mb-1" style={M}>Student Record</p>
               <h1 className="text-[1.4rem] font-semibold text-[#1E1B16] leading-tight" style={F}>My Events</h1>
             </div>
 
             {/* Tab switcher */}
-            <div className="flex border border-[#DCD4C2] rounded-[7px] overflow-hidden flex-shrink-0">
+            <div className="flex border border-[#DCD4C2] rounded-[7px] overflow-hidden flex-shrink-0 self-start">
               {(["upcoming", "past"] as const).map((t, i) => (
                 <div key={t} className="flex">
                   {i > 0 && <div className="w-px bg-[#DCD4C2]" />}
@@ -1655,7 +1821,7 @@ export function MyEventsScreen({
           </div>
 
           {/* ── Column labels ── */}
-          <div className="flex items-center gap-5 px-5">
+          <div className="hidden sm:flex items-center gap-5 px-5">
             <div className="flex-1 text-[8px] tracking-widest uppercase text-[#6B6355]" style={M}>Event</div>
             <div className="hidden xl:block w-28 text-[8px] tracking-widest uppercase text-[#6B6355] flex-shrink-0" style={M}>Code</div>
             {tab === "past" && <div className="w-24 text-[8px] tracking-widest uppercase text-[#6B6355] text-center flex-shrink-0" style={M}>Status</div>}
