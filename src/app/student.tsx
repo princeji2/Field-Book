@@ -19,7 +19,7 @@ import {
 } from "./shared";
 import { ProfileScreen } from "./profile";
 import { type AuthedProfile } from "../lib/auth";
-import { generateCertificate, generateCertificateCode } from "../lib/certificates";
+import { generateCertificateWithRetry, generateCertificateCode } from "../lib/certificates";
 import { recordAttendance } from "../lib/attendance";
 import {
   type StudentEventCard,
@@ -1735,21 +1735,28 @@ export function MyEventsScreen({
       throw new Error("This event has no certificate template configured yet.");
     }
 
-    const result = await generateCertificate({
-      studentName: profile?.fullName ?? "Sarah Chen",
-      eventTitle: ev.title,
-      templateId: ev.certTemplateId,
-      certificateCode: generateCertificateCode(),
-      studentId: profile?.id,
-    });
+    const result = await generateCertificateWithRetry(
+      {
+        studentName: profile?.fullName ?? "Sarah Chen",
+        eventTitle: ev.title,
+        templateId: ev.certTemplateId,
+        certificateCode: generateCertificateCode(),
+        studentId: profile?.id,
+      },
+      (wakingMessage) => {
+        toast.info(wakingMessage, { duration: 10000 });
+      },
+    );
 
     if (result.status === "error") {
       throw new Error(result.message);
     }
 
-    setCertUrls(prev => ({ ...prev, [ev.id]: result.certificateUrl }));
-    setCertGottenIds(prev => [...prev, ev.id]);
-    toast.success("Certificate issued", { description: "Your certificate is ready to view." });
+    if (result.status === "success") {
+      setCertUrls(prev => ({ ...prev, [ev.id]: result.certificateUrl }));
+      setCertGottenIds(prev => [...prev, ev.id]);
+      toast.success("Certificate issued", { description: "Your certificate is ready to view." });
+    }
   }
 
   function handleNav(id: string) {

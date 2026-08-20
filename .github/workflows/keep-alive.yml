@@ -1,0 +1,38 @@
+# Keep the certificate-service alive on Render's free tier.
+# Render spins down free-tier web services after ~15 minutes of inactivity,
+# causing 30–50 second cold starts on the next request. This workflow pings
+# the health endpoint every 10 minutes to prevent that sleep cycle.
+
+name: Keep Certificate Service Alive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping actuator health endpoint
+        run: |
+          RESPONSE=$(curl -sf -w "\nHTTP_STATUS:%{http_code}" \
+            https://fieldbook-certificate-service.onrender.com/actuator/health)
+
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS")
+
+          echo "Status code: $HTTP_STATUS"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::Health check failed with status $HTTP_STATUS"
+            exit 1
+          fi
+
+          if ! echo "$BODY" | grep -q '"status":"UP"'; then
+            echo "::error::Service is not UP. Response: $BODY"
+            exit 1
+          fi
+
+          echo "Service is healthy."

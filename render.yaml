@@ -1,0 +1,38 @@
+# Render Blueprint — declarative infrastructure-as-code for the
+# certificate-service. Render reads this file from the repo root and
+# configures the service accordingly on each push to main.
+#
+# Docs: https://docs.render.com/blueprint-spec
+
+services:
+  - type: web
+    name: fieldbook-certificate-service
+    runtime: docker
+    # Dockerfile lives inside the certificate-service/ subdirectory
+    dockerfilePath: ./certificate-service/Dockerfile
+    dockerContext: ./certificate-service
+    repo: https://github.com/princeji2/Field-Book
+    branch: main
+    region: oregon
+    plan: free
+    # Health check — Render pings this to know the service is live
+    healthCheckPath: /actuator/health
+    # Environment variables — values are set in the Render dashboard (secrets)
+    # or via `render env set`. Listed here so Blueprint provisions them as
+    # placeholders if they don't already exist.
+    envVars:
+      - key: PORT
+        value: "8081"
+      - key: FRONTEND_ORIGIN
+        # Your Vercel production URL — update to your actual domain
+        value: https://field-book.vercel.app
+      - key: FRONTEND_ORIGIN_PATTERN
+        # Allows all Vercel preview deployments to reach this service
+        value: https://*.vercel.app
+      - key: SUPABASE_URL
+        sync: false # set manually in Render dashboard
+      - key: SUPABASE_SERVICE_KEY
+        sync: false # set manually in Render dashboard
+      - key: JAVA_TOOL_OPTIONS
+        # Faster startup on constrained containers
+        value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
