@@ -6,17 +6,12 @@ import {
   Check, ArrowRight, BookMarked,
   Calendar, MapPin, GraduationCap,
   ClipboardList, ChevronRight,
-  Scan, Shield, ArrowLeft, Eye, EyeOff, Bell, Home, Search,
-  Download, Share2, X, Users, Plus,
-  Upload, Pencil, Copy, ChevronDown,
-  FileText, CheckCircle2, AlertTriangle, Settings, RefreshCw, ExternalLink,
-  XCircle, Clock, ChevronLeft, MessageSquare,
-  MoreHorizontal, UserPlus, Ban, ShieldCheck, Mail, Filter,
+  Scan, Shield, ArrowLeft, Bell, Search,
+  Download, Share2, X,
+  Upload,
+  AlertTriangle, Settings, RefreshCw,
+  XCircle, Filter,
 } from "lucide-react";
-import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell,
-} from "recharts";
 import { toast } from "sonner";
 import {
   F, M, dotGrid, type Screen,
