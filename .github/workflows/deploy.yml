@@ -1,0 +1,43 @@
+# Deploy certificate-service to Render on every push to main.
+#
+# Render's GitHub App auto-deploy connection is unreliable for this repo,
+# so this workflow uses the Render Deploy Hook as a fallback trigger.
+# The deploy hook URL is stored as a repository secret (RENDER_DEPLOY_HOOK_URL)
+# rather than hardcoded here — regenerate it in the Render dashboard if
+# it's ever exposed.
+
+name: Deploy Certificate Service
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "certificate-service/**"
+      - "render.yaml"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch: # allow manual trigger from Actions tab
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        run: |
+          RESPONSE=$(curl -sf -w "\nHTTP_STATUS:%{http_code}" \
+            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS")
+
+          echo "Status code: $HTTP_STATUS"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::Deploy hook failed with status $HTTP_STATUS"
+            exit 1
+          fi
+
+          # Extract deploy ID for traceability
+          DEPLOY_ID=$(echo "$BODY" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+          echo "Render deploy triggered successfully: $DEPLOY_ID"
+          echo "::notice::Render deploy ID: $DEPLOY_ID"
