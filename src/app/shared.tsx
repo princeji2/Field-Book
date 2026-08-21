@@ -85,7 +85,7 @@ export class ErrorBoundary extends Component<{ children: React.ReactNode }, EBSt
 }
 
 // ─── Screen type ────────────────────────────────────────────────────────────
-export type Screen = "landing" | "signup" | "forgot" | "dashboard" | "explore" | "details" | "myevents" | "scanner" | "certs" | "notifs" | "org-dashboard" | "org-events" | "org-events-create" | "org-qr" | "org-attendees" | "org-analytics" | "org-certs" | "admin-login" | "admin-role-confirm" | "admin-dashboard" | "admin-approvals" | "admin-users" | "admin-role-requests" | "admin-templates" | "admin-analytics" | "admin-settings" | "admin-notifs" | "profile";
+export type Screen = "landing" | "signup" | "forgot" | "pricing" | "campuses" | "dashboard" | "explore" | "details" | "myevents" | "scanner" | "certs" | "notifs" | "org-dashboard" | "org-events" | "org-events-create" | "org-qr" | "org-attendees" | "org-analytics" | "org-certs" | "admin-login" | "admin-role-confirm" | "admin-dashboard" | "admin-approvals" | "admin-users" | "admin-role-requests" | "admin-templates" | "admin-analytics" | "admin-settings" | "admin-notifs" | "profile";
 
 // ─── Scan demo data ─────────────────────────────────────────────────────────
 const SCAN_ROWS = [

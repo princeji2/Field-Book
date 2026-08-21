@@ -18,6 +18,8 @@ export function screenToPath(screen: Screen, id?: string): string {
     case "landing": return "/";
     case "signup": return "/signup";
     case "forgot": return "/forgot";
+    case "pricing": return "/pricing";
+    case "campuses": return "/campuses";
     case "admin-login": return "/login";
     case "admin-role-confirm": return "/login";
     case "profile": return "/profile";
