@@ -2071,6 +2071,17 @@ export function OrgAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavigat
                       style={{ height: VH, display: "block" }}
                       onMouseLeave={() => setHoveredRegIdx(null)}
                     >
+                      <defs>
+                        <clipPath id={`org-reg-clip-${dateRange}`}>
+                          <motion.rect
+                            key={dateRange}
+                            x={ml} y={0} height={VH}
+                            initial={{ width: 0 }}
+                            animate={{ width: pw }}
+                            transition={{ duration: 0.8, ease: [0.33, 1, 0.68, 1] }}
+                          />
+                        </clipPath>
+                      </defs>
                       {/* Gridlines */}
                       {yTicks.map(v => (
                         <g key={v}>
@@ -2091,18 +2102,21 @@ export function OrgAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavigat
                       {hoveredRegIdx !== null && (
                         <line x1={px(hoveredRegIdx)} y1={mt} x2={px(hoveredRegIdx)} y2={mt + ph} stroke="rgba(30,27,22,0.07)" strokeWidth={1} />
                       )}
-                      {/* Line */}
-                      <path d={linePath} fill="none" stroke="#1E1B16" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
-                      {/* Dots */}
-                      {regData.map((d, i) => {
-                        const isPeak = d.count === peakCount;
-                        const isHov = hoveredRegIdx === i;
-                        return isPeak ? (
-                          <circle key={i} cx={px(i)} cy={py(d.count)} r={isHov ? 6 : 5} fill="#E2A23B" stroke="#1E1B16" strokeWidth={1.5} />
-                        ) : (
-                          <circle key={i} cx={px(i)} cy={py(d.count)} r={isHov ? 4 : 2.5} fill={isHov ? "#E2A23B" : "#1E1B16"} stroke={isHov ? "#1E1B16" : "none"} strokeWidth={isHov ? 1.5 : 0} />
-                        );
-                      })}
+                      {/* Clipped group: line + dots */}
+                      <g clipPath={`url(#org-reg-clip-${dateRange})`}>
+                        {/* Line */}
+                        <path d={linePath} fill="none" stroke="#1E1B16" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+                        {/* Dots */}
+                        {regData.map((d, i) => {
+                          const isPeak = d.count === peakCount;
+                          const isHov = hoveredRegIdx === i;
+                          return isPeak ? (
+                            <circle key={i} cx={px(i)} cy={py(d.count)} r={isHov ? 6 : 5} fill="#E2A23B" stroke="#1E1B16" strokeWidth={1.5} />
+                          ) : (
+                            <circle key={i} cx={px(i)} cy={py(d.count)} r={isHov ? 4 : 2.5} fill={isHov ? "#E2A23B" : "#1E1B16"} stroke={isHov ? "#1E1B16" : "none"} strokeWidth={isHov ? 1.5 : 0} />
+                          );
+                        })}
+                      </g>
                       {/* Invisible hover zones */}
                       {regData.map((d, i) => (
                         <rect
@@ -2177,6 +2191,17 @@ export function OrgAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavigat
                       style={{ height: VH, display: "block" }}
                       onMouseLeave={() => setHoveredBarRow(null)}
                     >
+                      <defs>
+                        <clipPath id={`org-bar-clip-${dateRange}`}>
+                          <motion.rect
+                            key={dateRange}
+                            x={labelW} y={0} height={VH}
+                            initial={{ width: 0 }}
+                            animate={{ width: pw }}
+                            transition={{ duration: 0.7, ease: [0.33, 1, 0.68, 1], delay: 0.15 }}
+                          />
+                        </clipPath>
+                      </defs>
                       {ATTENDANCE_DATA.map((d, i) => {
                         const cy = mt + i * rowH + rowH / 2;
                         const checkedW = (d.checked / maxVal) * pw;
@@ -2186,8 +2211,10 @@ export function OrgAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavigat
                           <g key={i} onMouseEnter={() => setHoveredBarRow(i)}>
                             {isHov && <rect x={0} y={mt + i * rowH} width={VW} height={rowH} fill="rgba(30,27,22,0.03)" />}
                             <text x={labelW - 4} y={cy - gap / 2} textAnchor="end" fontSize={9} fill="#6B6355" fontFamily="'IBM Plex Mono',monospace" dominantBaseline="middle">{d.event}</text>
-                            <rect x={labelW} y={cy - barH - gap / 2} width={Math.max(checkedW, 2)} height={barH} fill="#2E6B4C" rx={2} ry={2} />
-                            <rect x={labelW} y={cy + gap / 2} width={Math.max(noshowW, 2)} height={barH} fill="#DCD4C2" rx={2} ry={2} />
+                            <g clipPath={`url(#org-bar-clip-${dateRange})`}>
+                              <rect x={labelW} y={cy - barH - gap / 2} width={Math.max(checkedW, 2)} height={barH} fill="#2E6B4C" rx={2} ry={2} />
+                              <rect x={labelW} y={cy + gap / 2} width={Math.max(noshowW, 2)} height={barH} fill="#DCD4C2" rx={2} ry={2} />
+                            </g>
                           </g>
                         );
                       })}

@@ -207,7 +207,7 @@ export function PricingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
                 <button
                   onClick={() => {
                     if (tier.name === "Institution / Enterprise") {
-                      window.location.href = "mailto:noreply@orgs.social?subject=Fieldbook%20Enterprise%20Inquiry";
+                      window.location.href = "mailto:princenaruka.business@gmail.com?subject=Fieldbook%20Enterprise%20Inquiry";
                     } else {
                       onNavigate("admin-login");
                     }
@@ -239,7 +239,7 @@ export function PricingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
               Every campus is different. Reach out and we'll help you find the right fit — no sales pitch, just an honest conversation about what you need.
             </p>
             <a
-              href="mailto:noreply@orgs.social?subject=Fieldbook%20Pricing%20Question"
+              href="mailto:princenaruka.business@gmail.com?subject=Fieldbook%20Pricing%20Question"
               className="inline-flex items-center gap-2 px-6 py-3 text-[#1E1B16] text-sm font-medium border border-[#1E1B16]/25 rounded-[7px] hover:border-[#1E1B16]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2 transition-colors"
             >
               Contact us <ArrowRight size={13} />

@@ -341,6 +341,17 @@ export function AdminAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavig
                     <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full" style={{ height: VH, display:"block" }}
                       aria-hidden="true"
                       onMouseLeave={() => setHoveredRoleRow(null)}>
+                      <defs>
+                        <clipPath id={`admin-role-clip-${dateRange}`}>
+                          <motion.rect
+                            key={dateRange}
+                            x={labelW} y={0} height={VH}
+                            initial={{ width: 0 }}
+                            animate={{ width: pw }}
+                            transition={{ duration: 0.7, ease: [0.33, 1, 0.68, 1], delay: 0.12 }}
+                          />
+                        </clipPath>
+                      </defs>
                       {ENGAGEMENT_BY_ROLE.map((d, i) => {
                         const cy = mt + i * rowH + rowH / 2;
                         const sessW = (d.sessions / maxVal) * pw;
@@ -350,8 +361,10 @@ export function AdminAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavig
                           <g key={i} onMouseEnter={() => setHoveredRoleRow(i)}>
                             {isHov && <rect x={0} y={mt + i*rowH} width={VW} height={rowH} fill="rgba(30,27,22,0.03)" />}
                             <text x={labelW-4} y={cy - gap/2} textAnchor="end" fontSize={9} fill="#6B6355" fontFamily="'IBM Plex Mono',monospace" dominantBaseline="middle">{d.role}</text>
-                            <rect x={labelW} y={cy - barH - gap/2} width={Math.max(sessW, 2)} height={barH} fill="#1E1B16" rx={2} ry={2} />
-                            <rect x={labelW} y={cy + gap/2} width={Math.max(certW, 2)} height={barH} fill="#DCD4C2" rx={2} ry={2} />
+                            <g clipPath={`url(#admin-role-clip-${dateRange})`}>
+                              <rect x={labelW} y={cy - barH - gap/2} width={Math.max(sessW, 2)} height={barH} fill="#1E1B16" rx={2} ry={2} />
+                              <rect x={labelW} y={cy + gap/2} width={Math.max(certW, 2)} height={barH} fill="#DCD4C2" rx={2} ry={2} />
+                            </g>
                           </g>
                         );
                       })}
