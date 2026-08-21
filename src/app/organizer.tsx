@@ -38,6 +38,7 @@ import {
   capitalizeStatus,
 } from "../lib/events";
 import { submitEventApproval } from "../lib/approvals";
+import { Link } from "react-router";
 
 // ─── Organizer shell ──────────────────────────────────────────────────────────
 
@@ -1479,24 +1480,39 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
       {/* ══ Nav ══════════════════════════════════════════════════════════════ */}
       <nav className="sticky top-0 z-50 bg-[#F6F1E7] border-b border-[#1E1B16]/12">
         <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-14">
-          <div className="flex items-center gap-2.5">
+          <Link to="/" className="flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] rounded-[4px]">
             <BookMarked size={16} className="text-[#E2A23B]" strokeWidth={1.75} />
             <span className="text-[#1E1B16] text-base font-semibold tracking-tight" style={F}>Fieldbook</span>
-          </div>
+          </Link>
           <div className="hidden md:flex items-center gap-7">
-            {["Features", "For Campuses", "Pricing"].map((l) => (
-              <a key={l} href="#" className="text-sm text-[#6B6355] hover:text-[#1E1B16] transition-colors duration-150">{l}</a>
-            ))}
+            <a
+              href="#features"
+              className="text-sm text-[#6B6355] hover:text-[#1E1B16] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2 rounded-[4px] transition-colors duration-150"
+            >
+              Features
+            </a>
+            <Link
+              to="/campuses"
+              className="text-sm text-[#6B6355] hover:text-[#1E1B16] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2 rounded-[4px] transition-colors duration-150"
+            >
+              For Campuses
+            </Link>
+            <Link
+              to="/pricing"
+              className="text-sm text-[#6B6355] hover:text-[#1E1B16] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2 rounded-[4px] transition-colors duration-150"
+            >
+              Pricing
+            </Link>
             <button
               onClick={() => onNavigate("admin-login")}
-              className="text-sm text-[#6B6355] hover:text-[#1E1B16] transition-colors duration-150"
+              className="text-sm text-[#6B6355] hover:text-[#1E1B16] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2 rounded-[4px] transition-colors duration-150"
             >
               Sign in
             </button>
           </div>
           <button
             onClick={() => onNavigate("admin-login")}
-            className="px-4 py-1.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors"
+            className="px-4 py-1.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2 transition-colors"
           >
             Get Started
           </button>
@@ -1668,7 +1684,7 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
         </section>
 
         {/* ══ Features Grid ════════════════════════════════════════════════ */}
-        <section className="border-t border-[#DCD4C2] bg-[#FCFAF3]">
+        <section id="features" className="border-t border-[#DCD4C2] bg-[#FCFAF3]">
           <div className="max-w-6xl mx-auto px-6 py-20">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
               <div>

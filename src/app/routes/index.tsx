@@ -6,6 +6,7 @@ import { AuthRouteGuard } from "./AuthRouteGuard";
 import { AdminUiProvider } from "./AdminUiContext";
 
 import { LandingRoute, SignupRoute, ForgotRoute } from "./PublicRoutes";
+import { PricingRoute, CampusesRoute } from "./MarketingRoutes";
 import { LoginRoute } from "./LoginRoute";
 import { AuthCallbackRoute } from "./AuthCallbackRoute";
 import { ResetCallbackRoute } from "./ResetCallbackRoute";
@@ -57,6 +58,8 @@ export function AnimatedRoutes() {
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/" element={<LandingRoute />} />
+          <Route path="/pricing" element={<PricingRoute />} />
+          <Route path="/campuses" element={<CampusesRoute />} />
           <Route path="/signup" element={<SignupRoute />} />
           <Route path="/forgot" element={<ForgotRoute />} />
           <Route path="/login" element={<LoginRoute />} />
