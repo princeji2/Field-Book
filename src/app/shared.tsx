@@ -227,10 +227,12 @@ export function CertificateSeal({
   size = 88,
   rotate = -8,
   delay = 0.3,
+  idle = false,
 }: {
   size?: number;
   rotate?: number;
   delay?: number;
+  idle?: boolean;
 }) {
   const rawId = useId();
   const uid = "s" + rawId.replace(/[^a-z0-9]/gi, "");
@@ -251,8 +253,14 @@ export function CertificateSeal({
     <motion.div
       style={{ width: size, height: size, display: "inline-block", flexShrink: 0 }}
       initial={{ scale: 0, rotate: rotate - 22, opacity: 0 }}
-      animate={{ scale: 1, rotate, opacity: 1 }}
-      transition={{ type: "spring", stiffness: 340, damping: 22, delay }}
+      animate={idle
+        ? { scale: 1, rotate: [rotate, rotate + 3, rotate - 2, rotate], opacity: 1 }
+        : { scale: 1, rotate, opacity: 1 }
+      }
+      transition={idle
+        ? { type: "spring", stiffness: 340, damping: 22, delay, rotate: { duration: 6, repeat: Infinity, ease: "easeInOut", delay: delay + 0.6 } }
+        : { type: "spring", stiffness: 340, damping: 22, delay }
+      }
     >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <defs>
@@ -499,7 +507,7 @@ export function HeroLedger() {
   ];
 
   return (
-    <div className="bg-[#FCFAF3] border border-[#1E1B16]/18 rounded-[8px] w-[308px] overflow-hidden">
+    <div className="bg-[#FCFAF3] border border-[#1E1B16]/18 rounded-[8px] w-full max-w-[308px] overflow-hidden">
       {/* Header */}
       <div className="px-4 py-2.5 border-b border-[#DCD4C2] flex items-center justify-between">
         <div className="flex items-center gap-2">

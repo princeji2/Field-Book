@@ -39,6 +39,10 @@ import {
 } from "../lib/events";
 import { submitEventApproval } from "../lib/approvals";
 import { Link } from "react-router";
+import {
+  Sheet, SheetTrigger, SheetContent, SheetClose, SheetTitle,
+} from "./components/ui/sheet";
+import { AnimatedBackground } from "./components/AnimatedBackground";
 
 // ─── Organizer shell ──────────────────────────────────────────────────────────
 
@@ -1464,6 +1468,95 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
   );
 }
 
+// ─── Animated stats row (fires CountUp when scrolled into view) ──────────────
+type StatDef = { target: number; formatted: string; suffix: string; label: string; scale?: number };
+
+/** Counts a decimal value (scaled ×10 internally) and renders with one decimal place. */
+function DecimalCountUp({ target, suffix, color, duration, delay }: {
+  target: number; suffix: string; color: string; duration: number; delay: number;
+}) {
+  const [display, setDisplay] = useState(0);
+  const startRef = useRef<number | null>(null);
+  const rafRef = useRef<number>(0);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      function tick(ts: number) {
+        if (startRef.current === null) startRef.current = ts;
+        const progress = Math.min((ts - startRef.current) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        setDisplay(Math.round(eased * target));
+        if (progress < 1) rafRef.current = requestAnimationFrame(tick);
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    }, delay);
+    return () => { clearTimeout(t); cancelAnimationFrame(rafRef.current); };
+  }, [target, duration, delay]);
+
+  const formatted = (display / 10).toFixed(1);
+  return <span style={{ color }}>{formatted}{suffix}</span>;
+}
+
+function StatsRow({ stats, className, valueClassName, labelClassName, itemClassName, accentColor }: {
+  stats: StatDef[];
+  className?: string;
+  valueClassName?: string;
+  labelClassName?: string;
+  itemClassName?: string;
+  accentColor?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setInView(true); observer.disconnect(); } },
+      { threshold: 0.3 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className={className}>
+      {stats.map(({ target, formatted, suffix, label, scale }, i) => (
+        <div key={label} className={itemClassName}>
+          <div className={valueClassName} style={F}>
+            {inView ? (
+              scale ? (
+                <DecimalCountUp
+                  target={target}
+                  suffix={suffix}
+                  color="#1E1B16"
+                  duration={600}
+                  delay={i * 100}
+                />
+              ) : (
+                <>
+                  <CountUp
+                    target={target}
+                    formatted={formatted}
+                    suffix=""
+                    color="#1E1B16"
+                    duration={600}
+                    delay={i * 100}
+                  />
+                  {suffix && <span style={{ color: accentColor || "#1E1B16" }}>{suffix}</span>}
+                </>
+              )
+            ) : (
+              <span style={{ color: "#1E1B16" }}>0{suffix && <span style={{ color: accentColor || "#1E1B16" }}>{suffix}</span>}</span>
+            )}
+          </div>
+          <div className={labelClassName}>{label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Landing page (all existing content, unchanged) ──────────────────────────
 export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
   const [demoStep, setDemoStep] = useState(0);
@@ -1475,7 +1568,8 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
   ];
 
   return (
-    <div className="bg-[#F6F1E7] text-[#1E1B16] min-h-screen" style={dotGrid}>
+    <div className="bg-[#F6F1E7] text-[#1E1B16] min-h-screen relative" style={dotGrid}>
+      <AnimatedBackground />
 
       {/* ══ Nav ══════════════════════════════════════════════════════════════ */}
       <nav className="sticky top-0 z-50 bg-[#F6F1E7] border-b border-[#1E1B16]/12">
@@ -1510,12 +1604,84 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
               Sign in
             </button>
           </div>
-          <button
-            onClick={() => onNavigate("admin-login")}
-            className="px-4 py-1.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2 transition-colors"
-          >
-            Get Started
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => onNavigate("admin-login")}
+              className="px-4 py-1.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2 transition-colors"
+            >
+              Get Started
+            </button>
+
+            {/* Mobile hamburger + drawer */}
+            <Sheet>
+              <SheetTrigger asChild>
+                <button
+                  className="md:hidden w-8 h-8 flex items-center justify-center border border-[#DCD4C2] rounded-[5px] hover:border-[#1E1B16]/30 transition-colors"
+                  aria-label="Open navigation menu"
+                >
+                  <Menu size={18} strokeWidth={1.5} className="text-[#1E1B16]" />
+                </button>
+              </SheetTrigger>
+              <SheetContent side="right" className="bg-[#F6F1E7] border-l border-[#DCD4C2] p-0">
+                <SheetTitle className="sr-only">Navigation menu</SheetTitle>
+                <div className="flex flex-col h-full">
+                  {/* Drawer header */}
+                  <div className="flex items-center gap-2.5 px-6 py-4 border-b border-[#DCD4C2]">
+                    <BookMarked size={16} className="text-[#E2A23B]" strokeWidth={1.75} />
+                    <span className="text-[#1E1B16] text-base font-semibold tracking-tight" style={F}>Fieldbook</span>
+                  </div>
+
+                  {/* Drawer links */}
+                  <div className="flex flex-col gap-1 px-4 py-4">
+                    <SheetClose asChild>
+                      <a
+                        href="#features"
+                        className="px-3 py-2.5 text-sm text-[#1E1B16] hover:bg-[#FCFAF3] rounded-[6px] transition-colors"
+                      >
+                        Features
+                      </a>
+                    </SheetClose>
+                    <SheetClose asChild>
+                      <Link
+                        to="/campuses"
+                        className="px-3 py-2.5 text-sm text-[#1E1B16] hover:bg-[#FCFAF3] rounded-[6px] transition-colors"
+                      >
+                        For Campuses
+                      </Link>
+                    </SheetClose>
+                    <SheetClose asChild>
+                      <Link
+                        to="/pricing"
+                        className="px-3 py-2.5 text-sm text-[#1E1B16] hover:bg-[#FCFAF3] rounded-[6px] transition-colors"
+                      >
+                        Pricing
+                      </Link>
+                    </SheetClose>
+                    <SheetClose asChild>
+                      <button
+                        onClick={() => onNavigate("admin-login")}
+                        className="px-3 py-2.5 text-sm text-[#1E1B16] hover:bg-[#FCFAF3] rounded-[6px] transition-colors text-left"
+                      >
+                        Sign in
+                      </button>
+                    </SheetClose>
+                  </div>
+
+                  {/* Drawer footer with CTA */}
+                  <div className="mt-auto px-4 py-4 border-t border-[#DCD4C2]">
+                    <SheetClose asChild>
+                      <button
+                        onClick={() => onNavigate("admin-login")}
+                        className="w-full px-6 py-3 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors"
+                      >
+                        Get Started
+                      </button>
+                    </SheetClose>
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
         </div>
       </nav>
 
@@ -1529,8 +1695,8 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
               <span className="text-[10px] text-[#6B6355] tracking-widest uppercase" style={M}>Campus Ledger System</span>
             </div>
 
-            <h1 className="text-5xl lg:text-[3.6rem] font-semibold leading-[1.06] tracking-tight text-[#1E1B16] mb-6" style={F}>
-              The Official Record<br />of Campus<br /><em className="text-[#6B6355]">Participation.</em>
+            <h1 className="text-4xl sm:text-5xl lg:text-[3.6rem] font-semibold leading-[1.06] tracking-tight text-[#1E1B16] mb-6" style={F}>
+              The Official Record<span className="hidden sm:inline"><br /></span>{" "}of Campus<span className="hidden sm:inline"><br /></span>{" "}<em className="text-[#6B6355]">Participation.</em>
             </h1>
 
             <p className="text-[#6B6355] text-lg leading-relaxed mb-10">
@@ -1549,14 +1715,16 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
               </button>
             </div>
 
-            <div className="border-t border-[#DCD4C2] pt-10 flex items-center gap-8">
-              {[["127+","Campuses"],["2.4M","Certificates"],["98.7%","Accuracy"]].map(([v,l]) => (
-                <div key={l}>
-                  <div className="text-xl font-semibold text-[#1E1B16] leading-none mb-1" style={F}>{v}</div>
-                  <div className="text-xs text-[#6B6355]">{l}</div>
-                </div>
-              ))}
-            </div>
+            <StatsRow
+              stats={[
+                { target: 127, formatted: "127", suffix: "+", label: "Campuses" },
+                { target: 24, formatted: "2.4", suffix: "M", label: "Certificates", scale: 10 },
+                { target: 987, formatted: "98.7", suffix: "%", label: "Accuracy", scale: 10 },
+              ]}
+              className="border-t border-[#DCD4C2] pt-10 flex items-center gap-8"
+              valueClassName="text-xl font-semibold text-[#1E1B16] leading-none mb-1"
+              labelClassName="text-xs text-[#6B6355]"
+            />
           </div>
 
           <div className="flex justify-center lg:justify-end">
@@ -1718,21 +1886,19 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
         {/* ══ Stats ════════════════════════════════════════════════════════ */}
         <section className="border-t border-[#DCD4C2]">
           <div className="max-w-6xl mx-auto px-6 py-20">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
-              {[
-                { v: "127",  u: "+",  l: "Partner Campuses" },
-                { v: "2.4",  u: "M",  l: "Certificates Issued" },
-                { v: "98.7", u: "%",  l: "Verification Accuracy" },
-                { v: "48",   u: "",   l: "Countries" },
-              ].map(({ v, u, l }) => (
-                <div key={l} className="border-l-2 border-[#E2A23B] pl-5">
-                  <div className="text-4xl font-light text-[#1E1B16] leading-none mb-2" style={F}>
-                    {v}<span className="text-[#E2A23B]">{u}</span>
-                  </div>
-                  <div className="text-xs text-[#6B6355]">{l}</div>
-                </div>
-              ))}
-            </div>
+            <StatsRow
+              stats={[
+                { target: 127, formatted: "127", suffix: "+", label: "Partner Campuses" },
+                { target: 24, formatted: "2.4", suffix: "M", label: "Certificates Issued", scale: 10 },
+                { target: 987, formatted: "98.7", suffix: "%", label: "Verification Accuracy", scale: 10 },
+                { target: 48, formatted: "48", suffix: "", label: "Countries" },
+              ]}
+              className="grid grid-cols-2 md:grid-cols-4 gap-10"
+              valueClassName="text-4xl font-light text-[#1E1B16] leading-none mb-2"
+              labelClassName="text-xs text-[#6B6355]"
+              itemClassName="border-l-2 border-[#E2A23B] pl-5"
+              accentColor="#E2A23B"
+            />
           </div>
         </section>
 
@@ -1740,7 +1906,7 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
         <section className="border-t border-[#DCD4C2] bg-[#FCFAF3]">
           <div className="max-w-xl mx-auto px-6 py-28 text-center">
             <div className="flex justify-center mb-8">
-              <CertificateSeal size={80} rotate={-7} delay={0} />
+              <CertificateSeal size={80} rotate={-7} delay={0} idle />
             </div>
             <h2 className="text-4xl font-semibold text-[#1E1B16] mb-5 leading-[1.1]" style={F}>
               Ready to formalize<br /><em className="text-[#6B6355]">campus participation?</em>
