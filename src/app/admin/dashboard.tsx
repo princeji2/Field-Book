@@ -108,10 +108,16 @@ function SeismographTrace({ width, height, rowCount, rowDelay }: {
           strokeWidth="1.5"
           strokeLinecap="round"
           initial={{ scaleY: 0, opacity: 0 }}
-          animate={[
-            { scaleY: 1, opacity: 0.7, transition: { duration: 0.09, delay: d, ease: "easeOut" } },
-            { scaleY: 0, opacity: 0,   transition: { duration: 0.28, delay: d + 0.09, ease: "easeIn" } },
-          ]}
+          animate={{
+            scaleY: [0, 1, 0],
+            opacity: [0, 0.7, 0],
+            transition: {
+              duration: 0.37,
+              delay: d,
+              times: [0, 0.243, 1],
+              ease: ["easeOut", "easeIn"],
+            },
+          }}
           style={{ transformOrigin: `${x}px ${mid}px` }}
         />
       ))}

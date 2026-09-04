@@ -1,0 +1,48 @@
+# Type-check the frontend on every push/PR that touches it.
+#
+# The production build (`npm run build`) runs `tsc -b --force && vite build`,
+# so a TypeScript error fails the build. This workflow enforces that same gate
+# in CI: Vite (esbuild) strips types without checking them, so without this a
+# type-broken frontend could still deploy via Vercel. Mirrors the path-filtered,
+# single-purpose style of deploy.yml.
+
+name: Frontend Type Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig*.json"
+      - "vite.config.ts"
+      - ".github/workflows/frontend-typecheck.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig*.json"
+      - "vite.config.ts"
+      - ".github/workflows/frontend-typecheck.yml"
+  workflow_dispatch: # allow manual trigger from Actions tab
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript type check
+        run: npm run typecheck

@@ -280,7 +280,7 @@ const ORG_EVENTS: OrgEvent[] = [
 
 type OrgActivityItem = {
   id: string;
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number; color?: string }>;
   text: string;
   time: string;
 };

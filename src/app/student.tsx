@@ -10,7 +10,7 @@ import {
   Download, Share2, X,
   Upload,
   AlertTriangle, Settings, RefreshCw,
-  XCircle, Filter,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -31,7 +31,7 @@ import {
 } from "../lib/events";
 
 // ─── Student Dashboard ────────────────────────────────────────────────────────
-export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
+export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?: (s: Screen, eventId?: string) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const [activeNav, setActiveNav] = useState("dashboard");
 
   // Explore preview widget below is real data (events_select_public RLS).
@@ -1965,7 +1965,6 @@ function parseQrValue(raw: string): string | null {
 type ScanPhase = "permission" | "scanning" | "detected" | "recording" | "success" | "error";
 
 export function ScannerScreen({
-  eventId,
   onNavigate,
   isGuest,
   profile,
@@ -3188,7 +3187,7 @@ export function CertificatesScreen({
 
 type NotifItem = {
   id: string;
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number; color?: string }>;
   text: string;
   meta: string;
   group: NotifGroup;

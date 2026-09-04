@@ -431,7 +431,7 @@ function TemplateEditor({
         canvas.width  = viewport.width;
         canvas.height = viewport.height;
         const ctx = canvas.getContext("2d")!;
-        await page.render({ canvasContext: ctx, viewport }).promise;
+        await page.render({ canvas, canvasContext: ctx, viewport }).promise;
         // Rendered PDF page becomes a PNG upload — Storage stores the
         // rendered image, not the original PDF bytes, matching what the
         // canvas preview already shows.
@@ -1161,7 +1161,7 @@ function UploadDesignScreen({
         canvas.width  = viewport.width;
         canvas.height = viewport.height;
         const ctx = canvas.getContext("2d")!;
-        await page.render({ canvasContext: ctx, viewport }).promise;
+        await page.render({ canvas, canvasContext: ctx, viewport }).promise;
         uploadFile = await canvasToPngFile(canvas, file.name);
         ratio = viewport.width / viewport.height;
       } else {

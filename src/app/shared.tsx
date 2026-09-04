@@ -1825,15 +1825,15 @@ export const NOTIF_GROUPS: { label: string; key: NotifGroup }[] = [
 ];
 
 // ─── Inline Seal ─────────────────────────────────────────────────────────────
-export function InlineSeal() {
-  const r2 = 17;
+export function InlineSeal({ size = 34 }: { size?: number }) {
+  const r2 = size / 2;
   const pts = Array.from({ length: 32 }, (_, i) => {
     const a = (i / 32) * Math.PI * 2 - Math.PI / 2;
     const rad = i % 2 === 0 ? r2 - 0.5 : r2 - 3;
     return `${(r2 + Math.cos(a) * rad).toFixed(2)},${(r2 + Math.sin(a) * rad).toFixed(2)}`;
   }).join(" ");
   return (
-    <svg width="34" height="34" viewBox="0 0 34 34">
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
       <polygon points={pts} fill="#E2A23B" />
       <circle cx={r2} cy={r2} r={r2 - 5} fill="#E2A23B" />
       <circle cx={r2} cy={r2} r={r2 - 6.5} fill="none" stroke="#1E1B16" strokeWidth="0.5" />

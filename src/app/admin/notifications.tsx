@@ -16,7 +16,7 @@ type AdminNotifCategory = "submission" | "flag" | "system" | "user";
 type AdminNotifItem = {
   id: string;
   category: AdminNotifCategory;
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number; color?: string }>;
   title: string;
   body: string;
   meta: string;

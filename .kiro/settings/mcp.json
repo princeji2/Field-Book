@@ -1,0 +1,43 @@
+{
+  "mcpServers": {
+    "codebase": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "codebase-mcp@latest",
+        "serve",
+        "--path",
+        "c:\\Users\\Prince\\Downloads\\Field Book"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "get_context",
+        "get_stack",
+        "get_structure",
+        "search_components",
+        "get_git_history",
+        "get_conventions"
+      ]
+    },
+    "playwright": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@playwright/mcp@latest"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "browser_navigate",
+        "browser_snapshot",
+        "browser_take_screenshot",
+        "browser_console_messages",
+        "browser_network_requests",
+        "browser_resize"
+      ]
+    }
+  }
+}

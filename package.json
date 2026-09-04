@@ -4,8 +4,9 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "vite build",
-    "dev": "vite"
+    "build": "tsc -b --force && vite build",
+    "dev": "vite",
+    "typecheck": "tsc -b --force"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
