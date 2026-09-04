@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   BookMarked, Menu, Home, CheckCircle2, Users, FileText,
   BarChart3, Settings, Bell, Eye, ChevronLeft, Plus,
-  ArrowLeft, User, LogOut, X, UserCog,
+  ArrowLeft, User, LogOut, UserCog,
 } from "lucide-react";
-import { toast } from "sonner";
-import { F, M, type Screen, useSidebarState, SidebarFrame } from "../shared";
+import { F, M, useSidebarState, SidebarFrame } from "../shared";
 
 // ─── Admin nav ────────────────────────────────────────────────────────────────
 

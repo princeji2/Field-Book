@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import { Award, BarChart3, Check, ArrowRight, ChevronRight, CheckCircle2, AlertTriangle, Users, FileText, UserCheck, RefreshCw, XCircle, Calendar, Send } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { motion } from "motion/react";
+import { Award, BarChart3, Check, ChevronRight, CheckCircle2, AlertTriangle, Users, FileText, UserCheck, RefreshCw, XCircle, Calendar, Send } from "lucide-react";
 import { toast } from "sonner";
 import { F, M, dotGrid, type Screen, CertificateSeal, parseMetricNum, StatMetricNumber } from "../shared";
 import { AdminAppShell } from "./shell";

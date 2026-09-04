@@ -3,7 +3,7 @@ import { AnimatePresence } from "motion/react";
 import { motion } from "motion/react";
 import { ArrowLeft, Check, Upload, Trash2, RefreshCw, Eye, EyeOff, LogOut, AlertTriangle, UserCog, Clock, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { F, M, dotGrid, type Screen } from "./shared";
+import { F, M, dotGrid } from "./shared";
 import { updateAvatarUrl } from "../lib/auth";
 import { uploadToBucket, buildObjectPath } from "../lib/storage";
 import {

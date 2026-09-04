@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowLeft, BarChart3, TrendingUp, Download } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { F, M, dotGrid, type Screen, parseMetricNum, StatMetricNumber } from "../shared";
 import { AdminAppShell } from "./shell";
@@ -275,7 +275,7 @@ export function AdminAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavig
                       </motion.g>
                     )}
                     {/* Hover zones */}
-                    {growthData.map((d, i) => (
+                    {growthData.map((_, i) => (
                       <rect key={i} x={px(i) - (pw/Math.max(n-1,1))/2} y={mt} width={pw/Math.max(n-1,1)} height={ph} fill="transparent" onMouseEnter={() => setHoveredGrowthIdx(i)} />
                     ))}
                   </svg>

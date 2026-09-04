@@ -1,7 +1,7 @@
 import { motion } from "motion/react";
 import { Check, ArrowRight, BookMarked } from "lucide-react";
 import { F, M, dotGrid, type Screen } from "./shared";
-import { useNavigate, Link } from "react-router";
+import { Link } from "react-router";
 
 // ─── Pricing page ────────────────────────────────────────────────────────────
 // NOTE: All pricing figures are PROVISIONAL PLACEHOLDERS pending real usage
@@ -63,8 +63,6 @@ const navLinkCls =
 ] as const;
 
 export function PricingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
-  const navigate = useNavigate();
-
   return (
     <div className="bg-[#F6F1E7] text-[#1E1B16] min-h-screen" style={dotGrid}>
 

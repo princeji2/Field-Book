@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { formatEventDate, formatEventTimeRange } from "./events";
 
 /**
  * Attendance recording service.
@@ -72,4 +73,104 @@ export async function checkAttendance(
   }
 
   return { status: "not_attended" };
+}
+
+/**
+ * A single attended event, flattened from an `attendance` row plus its
+ * embedded `events` context. Field names mirror the MyRegisteredEvent
+ * shape the "Past" tab of the My Events screen already renders (title,
+ * category, date, time, venue, code), so the UI can consume this without a
+ * separate mapping layer. `attended` is always true here — this list is
+ * derived from real attendance records, so every entry is, by definition,
+ * an event the student attended.
+ */
+export interface AttendedEvent {
+  /** The event id (attendance.event_id). */
+  id: string;
+  title: string;
+  category: string;
+  /** Display-formatted event_date, e.g. "Nov 14, 2024". */
+  date: string;
+  /** Display-formatted start–end range, e.g. "9:00 AM – 11:30 AM". */
+  time: string;
+  venue: string;
+  code: string;
+  /** ISO timestamp the attendance was recorded (attendance.recorded_at). */
+  recordedAt: string;
+  attended: true;
+}
+
+export type ListMyAttendanceResult =
+  | { status: "success"; events: AttendedEvent[] }
+  | { status: "error"; message: string };
+
+// Shape of the embedded events row returned by the PostgREST join.
+// supabase-js types a foreign-table embed as an array even for a to-one
+// relationship, so it's modelled here as an array and normalized to the
+// first element (or null) at read time.
+interface AttendanceEmbeddedEvent {
+  title: string | null;
+  category: string | null;
+  venue: string | null;
+  code: string | null;
+  event_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  location_type: string | null;
+}
+
+interface AttendanceJoinRow {
+  event_id: string;
+  recorded_at: string;
+  events: AttendanceEmbeddedEvent | AttendanceEmbeddedEvent[] | null;
+}
+
+function firstAttendanceEmbed(
+  events: AttendanceEmbeddedEvent | AttendanceEmbeddedEvent[] | null,
+): AttendanceEmbeddedEvent | null {
+  if (!events) return null;
+  return Array.isArray(events) ? (events[0] ?? null) : events;
+}
+
+/**
+ * Lists every event the signed-in student has an attendance record for,
+ * newest first, with each event's title/date/time/venue/code resolved in
+ * the same query via the events FK embed.
+ *
+ * Scoped by the `attendance_select_own` RLS policy
+ * (student_id = auth.uid()); an explicit `.eq("student_id", studentId)` is
+ * also applied so the query is correct and cheap regardless, and can never
+ * surface another student's rows. Rows whose linked event is not visible
+ * (e.g. deleted) come back with a null embed and fall back to generic
+ * labels rather than being dropped.
+ */
+export async function listMyAttendance(
+  studentId: string,
+): Promise<ListMyAttendanceResult> {
+  const { data, error } = await supabase
+    .from("attendance")
+    .select(
+      "event_id, recorded_at, events(title, category, venue, code, event_date, start_time, end_time, location_type)",
+    )
+    .eq("student_id", studentId)
+    .order("recorded_at", { ascending: false });
+
+  if (error) return { status: "error", message: error.message };
+
+  const events: AttendedEvent[] = ((data ?? []) as unknown as AttendanceJoinRow[]).map((row) => {
+    const ev = firstAttendanceEmbed(row.events);
+    return {
+      id: row.event_id,
+      title: ev?.title ?? "Fieldbook Event",
+      category: ev?.category ?? "General",
+      date: formatEventDate(ev?.event_date),
+      time: formatEventTimeRange(ev?.start_time, ev?.end_time),
+      venue: ev?.location_type === "online" ? "Online" : (ev?.venue ?? "Venue TBD"),
+      code: ev?.code ?? "",
+      recordedAt: row.recorded_at,
+      attended: true,
+    };
+  });
+
+  return { status: "success", events };
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Check, ArrowLeft, X, ChevronRight, XCircle, Clock, Calendar, MapPin, Users, MessageSquare, RefreshCw } from "lucide-react";
 import { toast } from "sonner";

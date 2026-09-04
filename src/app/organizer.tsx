@@ -5,13 +5,12 @@ import {
   Check, ArrowRight, BookMarked,
   Calendar, MapPin, GraduationCap,
   ClipboardList, Scan, ChevronRight,
-  ArrowLeft, Bell, Home, Search,
-  Download, Share2, X, Users, Plus,
+  ArrowLeft, Bell, Home,
+  Download, X, Users, Plus,
   Upload, Pencil, Copy, TrendingUp, ChevronDown,
   ImagePlus, Menu,
-  FileText, CheckCircle2, AlertTriangle, Settings, RefreshCw, ExternalLink,
-  XCircle, Clock, MoreHorizontal, Filter,
-  LayoutTemplate, Star, Eye as EyeIcon, Trash2, GripVertical, Settings2,
+  CheckCircle2, RefreshCw,
+  Eye as EyeIcon, Settings2,
   User, LogOut,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -29,12 +28,10 @@ import { uploadToBucket, buildObjectPath } from "../lib/storage";
 import { supabase } from "../lib/supabaseClient";
 import {
   type EventRow,
-  type EventStatus,
   listOrganizerEvents,
   generateEventCode,
   formatEventDate,
   formatEventTime,
-  formatEventTimeRange,
   capitalizeStatus,
 } from "../lib/events";
 import { submitEventApproval } from "../lib/approvals";
@@ -2229,7 +2226,6 @@ export function OrgAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavigat
                   const px = (i: number) => ml + (n < 2 ? pw / 2 : (i / (n - 1)) * pw);
                   const py = (v: number) => mt + (1 - v / maxV) * ph;
                   const linePath = regData.map((d, i) => `${i === 0 ? "M" : "L"}${px(i).toFixed(1)},${py(d.count).toFixed(1)}`).join(" ");
-                  const hovered = hoveredRegIdx !== null ? regData[hoveredRegIdx] : null;
                   return (
                     <svg
                       viewBox={`0 0 ${VW} ${VH}`}
@@ -2284,7 +2280,7 @@ export function OrgAnalyticsScreen({ onNavigate, isGuest, profile }: { onNavigat
                         })}
                       </g>
                       {/* Invisible hover zones */}
-                      {regData.map((d, i) => (
+                      {regData.map((_, i) => (
                         <rect
                           key={i}
                           x={px(i) - (pw / Math.max(n - 1, 1)) / 2}
@@ -3240,7 +3236,6 @@ export function OrgQRScreen({ onNavigate, isGuest, profile, initialEventId }: { 
 
   // Show all non-draft events (published, live, completed) for QR management
   const sessions = allEvents.filter(e => e.status === "published" || e.status === "live" || e.status === "completed");
-  const defaultId = (sessions.find(e => e.status === "live") ?? sessions[0])?.id ?? null;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [qrSeed, setQrSeed]         = useState(1);
@@ -3357,7 +3352,6 @@ export function OrgQRScreen({ onNavigate, isGuest, profile, initialEventId }: { 
   const evDate = event ? formatEventDate(event.event_date) : "";
   const evStartTime = event ? formatEventTime(event.start_time) : undefined;
   const evEndTime = event ? formatEventTime(event.end_time) : undefined;
-  const evTimeRange = event ? formatEventTimeRange(event.start_time, event.end_time) : "";
   const evVenue = event?.venue ?? "Venue TBD";
 
   return (

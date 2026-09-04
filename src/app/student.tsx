@@ -20,7 +20,12 @@ import {
 import { ProfileScreen } from "./profile";
 import { type AuthedProfile } from "../lib/auth";
 import { generateCertificateWithRetry, generateCertificateCode } from "../lib/certificates";
-import { recordAttendance } from "../lib/attendance";
+import { listMyCertificates, type StudentCertificate } from "../lib/studentCertificates";
+import { recordAttendance, listMyAttendance, type AttendedEvent } from "../lib/attendance";
+import {
+  registerForEvent, cancelRegistration, listMyRegistrations,
+  getActiveRegistrationCounts, type RegisteredEvent,
+} from "../lib/registrations";
 import {
   type StudentEventCard,
   type EventRow,
@@ -35,13 +40,26 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
   const [activeNav, setActiveNav] = useState("dashboard");
 
   // Explore preview widget below is real data (events_select_public RLS).
-  // "Next Up" and "Certificates" summary cards above/below it still render
-  // fixed placeholder content — there is no registrations/attendees table
-  // yet to know which events THIS student is registered for or has
-  // checked into (see the note on MyEventsScreen), so "Next Up" can't be
-  // computed from real data without inventing that table. Flagged rather
-  // than wired to a fake per-student query.
+  // "Next Up" and the "My Events" summary list still render fixed
+  // placeholder content — there is no registrations/attendees table yet to
+  // know which events THIS student is registered for, so "Next Up" can't be
+  // computed from real data without inventing that table (deferred to
+  // Stage 2). The certificate and attendance COUNTS below, however, are now
+  // real (certificates_select_own_student / attendance_select_own RLS).
   const [previewEvents, setPreviewEvents] = useState<EventItem[]>([]);
+
+  const studentName = profile?.fullName ?? "Sarah Chen";
+  const studentId   = profile?.id ?? "SCH-4421";
+
+  // Real per-student data. null = not yet loaded / unavailable (guest),
+  // in which case the cards fall back to a neutral placeholder rather than
+  // a fabricated number.
+  const [certCount, setCertCount]           = useState<number | null>(null);
+  const [attendedCount, setAttendedCount]   = useState<number | null>(null);
+  const [attendedRecent, setAttendedRecent] = useState<AttendedEvent[]>([]);
+  // Real registrations (registrations_select_own RLS): drives the "Next Up"
+  // card (soonest registered event).
+  const [registeredEvents, setRegisteredEvents] = useState<RegisteredEvent[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,6 +71,35 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
     })();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    // Guests have no auth session — leave counts as null (placeholder).
+    if (isGuest || !profile?.id) return;
+    let cancelled = false;
+    (async () => {
+      const [certResult, attResult, regResult] = await Promise.all([
+        listMyCertificates(profile.id),
+        listMyAttendance(profile.id),
+        listMyRegistrations(profile.id),
+      ]);
+      if (cancelled) return;
+      if (certResult.status === "success") setCertCount(certResult.certificates.length);
+      if (attResult.status === "success") {
+        setAttendedCount(attResult.events.length);
+        setAttendedRecent(attResult.events.slice(0, 3));
+      }
+      if (regResult.status === "success") {
+        setRegisteredEvents(regResult.events);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isGuest, profile?.id]);
+
+  // The soonest registered event drives the "Next Up" card. Registrations
+  // come back newest-first, so pick the one with the earliest event date.
+  const nextUp = registeredEvents.length > 0
+    ? [...registeredEvents].sort((a, b) => (a.eventDate ?? "").localeCompare(b.eventDate ?? ""))[0]
+    : null;
 
   function handleNav(id: string) {
     if (id === "profile")  { onNavigate?.("profile");  return; }
@@ -69,8 +116,8 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
     <AppShell
       activeNav={activeNav}
       notifCount={3}
-      studentName={profile?.fullName ?? "Sarah Chen"}
-      studentId={profile?.id ?? "SCH-4421"}
+      studentName={studentName}
+      studentId={studentId}
       isGuest={isGuest}
       onNav={handleNav}
       onNavigate={onNavigate}
@@ -93,67 +140,86 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
                 {/* Card header */}
                 <div className="flex items-start justify-between mb-5">
                   <p className="text-[9px] tracking-widest uppercase text-[#6B6355]" style={M}>Next Up</p>
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-[#2E6B4C] rounded-full">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#2E6B4C]" />
-                    <span className="text-[9px] text-[#2E6B4C]" style={M}>Check-in Open</span>
-                  </div>
+                  {nextUp && (
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-[#2E6B4C] rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#2E6B4C]" />
+                      <span className="text-[9px] text-[#2E6B4C]" style={M}>Registered</span>
+                    </div>
+                  )}
                 </div>
 
-                {/* Content row */}
-                <div className="flex items-start justify-between gap-6">
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-[1.6rem] font-semibold text-[#1E1B16] mb-4 leading-[1.15]" style={F}>
-                      Environmental Policy<br />Symposium
+                {nextUp ? (
+                  /* Content row — soonest registered event */
+                  <div className="flex items-start justify-between gap-6">
+                    <div className="flex-1 min-w-0">
+                      <h2 className="text-[1.6rem] font-semibold text-[#1E1B16] mb-4 leading-[1.15]" style={F}>
+                        {nextUp.title}
+                      </h2>
+                      <div className="space-y-2.5 mb-6">
+                        <div className="flex items-center gap-2.5 text-sm text-[#6B6355]">
+                          <Calendar size={13} strokeWidth={1.5} className="flex-shrink-0" />
+                          {nextUp.date} · {nextUp.time}
+                        </div>
+                        <div className="flex items-center gap-2.5 text-sm text-[#6B6355]">
+                          <MapPin size={13} strokeWidth={1.5} className="flex-shrink-0" />
+                          {nextUp.venue}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => onNavigate?.("scanner", nextUp.id)}
+                          className="flex items-center gap-2 px-5 py-2.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors"
+                        >
+                          <QrCode size={13} strokeWidth={1.5} />
+                          Check In via QR
+                        </button>
+                        <button
+                          onClick={() => onNavigate?.("details", nextUp.id)}
+                          className="px-5 py-2.5 text-sm text-[#6B6355] border border-[#DCD4C2] rounded-[7px] hover:border-[#1E1B16]/30 transition-colors"
+                        >
+                          View Details →
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* QR code preview */}
+                    <div className="flex-shrink-0 flex flex-col items-center gap-2">
+                      <div className="p-3 border border-[#DCD4C2] rounded-[7px] bg-white">
+                        <MockQR size={100} />
+                      </div>
+                      <span className="text-[8px] text-[#6B6355]" style={M}>{nextUp.code}</span>
+                    </div>
+                  </div>
+                ) : (
+                  /* Empty state — no active registrations */
+                  <div className="py-6 flex flex-col items-start gap-4">
+                    <h2 className="text-[1.4rem] font-semibold text-[#1E1B16] leading-[1.15]" style={F}>
+                      Nothing on your calendar yet.
                     </h2>
-                    <div className="space-y-2.5 mb-6">
-                      <div className="flex items-center gap-2.5 text-sm text-[#6B6355]">
-                        <Calendar size={13} strokeWidth={1.5} className="flex-shrink-0" />
-                        November 14, 2024 · 9:00 – 11:30 AM
-                      </div>
-                      <div className="flex items-center gap-2.5 text-sm text-[#6B6355]">
-                        <MapPin size={13} strokeWidth={1.5} className="flex-shrink-0" />
-                        Whitman Hall, Room 204
-                      </div>
-                      <div className="flex items-center gap-2.5 text-sm text-[#6B6355]">
-                        <GraduationCap size={13} strokeWidth={1.5} className="flex-shrink-0" />
-                        Prof. Andrei Volkov · Environmental Science
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => onNavigate?.("scanner", previewEvents[0]?.id)}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors"
-                      >
-                        <QrCode size={13} strokeWidth={1.5} />
-                        Check In via QR
-                      </button>
-                      <button
-                        onClick={() => onNavigate?.("details", previewEvents[0]?.id)}
-                        className="px-5 py-2.5 text-sm text-[#6B6355] border border-[#DCD4C2] rounded-[7px] hover:border-[#1E1B16]/30 transition-colors"
-                      >
-                        View Details →
-                      </button>
-                    </div>
+                    <p className="text-sm text-[#6B6355] max-w-sm leading-relaxed">
+                      Register for an event and it will show up here with your QR check-in pass.
+                    </p>
+                    <button
+                      onClick={() => onNavigate?.("explore")}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors"
+                    >
+                      <Compass size={13} strokeWidth={1.5} />
+                      Explore Events
+                    </button>
                   </div>
-
-                  {/* QR code preview */}
-                  <div className="flex-shrink-0 flex flex-col items-center gap-2">
-                    <div className="p-3 border border-[#DCD4C2] rounded-[7px] bg-white">
-                      <MockQR size={100} />
-                    </div>
-                    <span className="text-[8px] text-[#6B6355]" style={M}>ENV-POL-2024</span>
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Footer strip */}
-              <div className="border-t border-[#DCD4C2] bg-[#F6F1E7] px-6 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-[9px] text-[#6B6355]" style={M}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#2E6B4C]" />
-                  47 registered · Certificate issued on verified attendance
+              {nextUp && (
+                <div className="border-t border-[#DCD4C2] bg-[#F6F1E7] px-6 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-[9px] text-[#6B6355]" style={M}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#2E6B4C]" />
+                    Certificate issued on verified attendance
+                  </div>
+                  <span className="text-[9px] text-[#6B6355]" style={M}>{nextUp.code}</span>
                 </div>
-                <span className="text-[9px] text-[#6B6355]" style={M}>#FB-2024-0891</span>
-              </div>
+              )}
             </motion.div>
 
             {/* Summary column */}
@@ -167,28 +233,31 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
                 transition={{ duration: 0.25, ease: "easeOut", delay: 0.07 }}
               >
                 <div className="px-5 py-4 border-b border-[#DCD4C2]">
-                  <p className="text-[9px] tracking-widest uppercase text-[#6B6355] mb-2" style={M}>My Events</p>
+                  <p className="text-[9px] tracking-widest uppercase text-[#6B6355] mb-2" style={M}>Events Attended</p>
                   <div className="text-4xl font-light text-[#1E1B16] leading-none" style={F}>
-                    4<span className="text-[#E2A23B] text-3xl">+</span>
+                    {attendedCount ?? "—"}
                   </div>
                 </div>
                 <div className="px-5 py-3 space-y-2.5">
-                  {[
-                    { name: "Environmental Policy Symposium", date: "Nov 14" },
-                    { name: "Design Thinking Workshop",       date: "Nov 8"  },
-                    { name: "Leadership Primer Workshop",     date: "Nov 5"  },
-                  ].map((ev) => (
-                    <div key={ev.name} className="flex items-start gap-2 min-w-0">
+                  {attendedRecent.length === 0 ? (
+                    <p className="text-[9px] text-[#9C8E7E] py-1" style={M}>
+                      No check-ins yet.
+                    </p>
+                  ) : attendedRecent.map((ev) => (
+                    <div key={ev.id} className="flex items-start gap-2 min-w-0">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#2E6B4C] flex-shrink-0 mt-1" />
                       <div className="min-w-0 flex-1">
-                        <div className="text-[10px] text-[#1E1B16] leading-snug truncate">{ev.name}</div>
+                        <div className="text-[10px] text-[#1E1B16] leading-snug truncate">{ev.title}</div>
                         <div className="text-[8px] text-[#6B6355]" style={M}>{ev.date}</div>
                       </div>
                     </div>
                   ))}
                 </div>
                 <div className="border-t border-[#DCD4C2] px-5 py-2.5">
-                  <button className="text-xs text-[#6B6355] hover:text-[#1E1B16] transition-colors">
+                  <button
+                    onClick={() => onNavigate?.("myevents")}
+                    className="text-xs text-[#6B6355] hover:text-[#1E1B16] transition-colors"
+                  >
                     View all events →
                   </button>
                 </div>
@@ -204,7 +273,7 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
                 <div className="px-5 py-4 border-b border-[#DCD4C2] flex items-start justify-between gap-2">
                   <div>
                     <p className="text-[9px] tracking-widest uppercase text-[#6B6355] mb-2" style={M}>Certificates</p>
-                    <div className="text-4xl font-light text-[#1E1B16] leading-none" style={F}>3</div>
+                    <div className="text-4xl font-light text-[#1E1B16] leading-none" style={F}>{certCount ?? "—"}</div>
                   </div>
                   <CertificateSeal size={44} rotate={-8} delay={0.5} />
                 </div>
@@ -357,12 +426,16 @@ export function EventCard({
   onRegister,
   onView,
   isGuest,
+  full = false,
+  pending = false,
 }: {
   ev: EventItem;
   registered: boolean;
   onRegister: () => void;
   onView?: () => void;
   isGuest?: boolean;
+  full?: boolean;
+  pending?: boolean;
 }) {
   const spotsLow = ev.spots <= 10;
 
@@ -443,15 +516,33 @@ export function EventCard({
           </div>
           <CertificateSeal size={44} rotate={-9} delay={0.15} />
         </div>
+      ) : full ? (
+        <div className="border-t border-[#DCD4C2] px-4 py-3 space-y-2">
+          <div
+            className="w-full flex items-center justify-center gap-1.5 py-2 text-sm font-semibold rounded-[7px] border border-[#DCD4C2] text-[#6B6355] cursor-not-allowed"
+            title="This event is full"
+          >
+            Full
+          </div>
+          {onView && (
+            <button
+              onClick={onView}
+              className="w-full text-center text-[9px] text-[#6B6355] hover:text-[#1E1B16] transition-colors"
+              style={M}
+            >
+              View details →
+            </button>
+          )}
+        </div>
       ) : (
         <div className="border-t border-[#DCD4C2] px-4 py-3 space-y-2">
           <button
             onClick={onRegister}
-            disabled={isGuest}
+            disabled={isGuest || pending}
             title={isGuest ? "Disabled in guest mode" : undefined}
             className="w-full flex items-center justify-center gap-1.5 py-2 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Register <ArrowRight size={12} />
+            {pending ? <><RefreshCw size={12} className="animate-spin" /> Registering…</> : <>Register <ArrowRight size={12} /></>}
           </button>
           {onView && (
             <button
@@ -647,6 +738,7 @@ export function EventDetailScreen({
   const [related, setRelated] = useState<EventItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [registered, setRegistered] = useState(false);
+  const [regPending, setRegPending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -671,6 +763,46 @@ export function EventDetailScreen({
     })();
     return () => { cancelled = true; };
   }, [eventId]);
+
+  // Hydrate whether the student is already registered for this event, so the
+  // registered state persists across reloads (guests have no session).
+  useEffect(() => {
+    if (isGuest || !profile?.id) return;
+    let cancelled = false;
+    (async () => {
+      const result = await listMyRegistrations(profile.id);
+      if (!cancelled && result.status === "success") {
+        setRegistered(result.events.some(e => e.id === eventId));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isGuest, profile?.id, eventId]);
+
+  async function handleRegister() {
+    if (isGuest || regPending) return;
+    setRegPending(true);
+    const result = await registerForEvent(eventId);
+    setRegPending(false);
+    if (result.status === "success") {
+      setRegistered(true);
+      toast.success("Registered", { description: "Your spot is secured." });
+    } else {
+      toast.error(result.message);
+    }
+  }
+
+  async function handleCancelRegistration() {
+    if (isGuest || regPending) return;
+    setRegPending(true);
+    const result = await cancelRegistration(eventId);
+    setRegPending(false);
+    if (result.status === "success") {
+      setRegistered(false);
+      toast("Registration cancelled", { description: "Your spot has been released." });
+    } else {
+      toast.error(result.message);
+    }
+  }
 
   const details = ev ? EVENT_DETAILS[ev.id] : undefined;
   const spotsLow = ev ? ev.spots <= 10 : false;
@@ -899,6 +1031,15 @@ export function EventDetailScreen({
                         <p className="text-[8px] text-[#6B6355] text-center leading-relaxed">
                           Show this QR code at the venue entrance. Check-in logs your attendance automatically.
                         </p>
+                        <button
+                          onClick={handleCancelRegistration}
+                          disabled={isGuest || regPending}
+                          title={isGuest ? "Disabled in guest mode" : undefined}
+                          className="w-full text-center text-[9px] text-[#6B6355] hover:text-[#B5432E] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          style={M}
+                        >
+                          {regPending ? "Cancelling…" : "Cancel registration"}
+                        </button>
                       </div>
                     </motion.div>
                   ) : (
@@ -933,12 +1074,12 @@ export function EventDetailScreen({
                           </div>
                         </div>
                         <button
-                          onClick={() => setRegistered(true)}
-                          disabled={isGuest}
+                          onClick={handleRegister}
+                          disabled={isGuest || regPending}
                           title={isGuest ? "Disabled in guest mode" : undefined}
                           className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#E2A23B] text-[#1E1B16] font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors text-sm disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                          Register now <ArrowRight size={13} />
+                          {regPending ? <><RefreshCw size={13} className="animate-spin" /> Registering…</> : <>Register now <ArrowRight size={13} /></>}
                         </button>
                         <p className="text-[8px] text-[#6B6355] text-center leading-relaxed">
                           A QR pass is issued instantly. Your attendance is recorded in your Fieldbook ledger.
@@ -1007,7 +1148,13 @@ export function ExploreScreen({
   const [category,   setCategory]    = useState("All");
   const [dateFilter, setDateFilter]   = useState("All Dates");
   const [liveOnly,   setLiveOnly]     = useState(false);
+  // Real registrations for this student (registrations_select_own RLS),
+  // replacing the previous local-only registeredIds state.
   const [registeredIds, setRegisteredIds] = useState<string[]>([]);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  // Global active-registration counts per event (via SECURITY DEFINER RPC),
+  // used to compute real "spots left".
+  const [regCounts, setRegCounts] = useState<Map<string, number>>(new Map());
   const [visibleCount, setVisibleCount]   = useState(6);
   const [activeNav, setActiveNav]     = useState("explore");
 
@@ -1027,9 +1174,47 @@ export function ExploreScreen({
       if (result.status === "error") { setEventsError(result.message); return; }
       setEventsError(null);
       setEvents(result.events);
+      // Load global active-registration counts for the fetched events so
+      // "spots left" reflects reality.
+      const counts = await getActiveRegistrationCounts(result.events.map(e => e.id));
+      if (!cancelled && counts.status === "success") setRegCounts(counts.counts);
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Hydrate which events this student is already registered for, so the
+  // "Registered" state persists across reloads (guests have no session).
+  useEffect(() => {
+    if (isGuest || !profile?.id) return;
+    let cancelled = false;
+    (async () => {
+      const result = await listMyRegistrations(profile.id);
+      if (!cancelled && result.status === "success") {
+        setRegisteredIds(result.events.map(e => e.id));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isGuest, profile?.id]);
+
+  async function handleRegister(eventId: string) {
+    if (isGuest || pendingId) return;
+    setPendingId(eventId);
+    const result = await registerForEvent(eventId);
+    setPendingId(null);
+    if (result.status === "success") {
+      setRegisteredIds(prev => prev.includes(eventId) ? prev : [...prev, eventId]);
+      setRegCounts(prev => {
+        const next = new Map(prev);
+        next.set(eventId, (next.get(eventId) ?? 0) + 1);
+        return next;
+      });
+      toast.success("Registered", { description: "Your spot is secured." });
+    } else if (result.status === "full") {
+      toast.error(result.message);
+    } else {
+      toast.error(result.message);
+    }
+  }
 
   function handleNav(id: string) {
     if (id === "profile")   { onNavigate("profile");   return; }
@@ -1228,17 +1413,26 @@ export function ExploreScreen({
                   className="flex"
                 >
                   <div className="flex-1">
-                    <EventCard
-                      ev={ev}
-                      registered={registeredIds.includes(ev.id)}
-                      onRegister={() =>
-                        setRegisteredIds(prev =>
-                          prev.includes(ev.id) ? prev : [...prev, ev.id]
-                        )
-                      }
-                      onView={onViewDetail ? () => onViewDetail(ev.id) : undefined}
-                      isGuest={isGuest}
-                    />
+                    {(() => {
+                      const isReg = registeredIds.includes(ev.id);
+                      // Real "spots left": capacity − global active registrations,
+                      // clamped ≥ 0. capacity 0 means "no limit" (see RPC), so
+                      // fall back to the raw capacity figure for display.
+                      const active = regCounts.get(ev.id) ?? 0;
+                      const remaining = ev.capacity > 0 ? Math.max(0, ev.capacity - active) : ev.capacity;
+                      const full = ev.capacity > 0 && remaining <= 0 && !isReg;
+                      return (
+                        <EventCard
+                          ev={{ ...ev, spots: remaining }}
+                          registered={isReg}
+                          onRegister={() => handleRegister(ev.id)}
+                          onView={onViewDetail ? () => onViewDetail(ev.id) : undefined}
+                          isGuest={isGuest}
+                          full={full}
+                          pending={pendingId === ev.id}
+                        />
+                      );
+                    })()}
                   </div>
                 </motion.div>
               ))}
@@ -1298,31 +1492,11 @@ type MyRegisteredEvent = {
   certTemplateId?: string;
 };
 
-// One-off test fixture: a `certificate_templates` row named
-// "TEST TEMPLATE - DELETE ME" inserted directly via the service-role key so
-// the real /api/certificates/generate success path could be exercised
-// end-to-end before events carry their own template id. Delete this
-// constant (and the Supabase row it points to) once events have real
-// template linkage.
-const TEST_CERT_TEMPLATE_ID = "b7f12cf1-23fd-4161-8fd4-f186f79edef4";
+// MyRegisteredEvent is the row shape UpcomingRow renders. Upcoming data is
+// now real (active registrations via listMyRegistrations, mapped to this
+// shape in MyEventsScreen); the former MY_UPCOMING mock array is gone.
 
-const MY_UPCOMING: MyRegisteredEvent[] = [
-  { id: "mu1", title: "Environmental Policy Symposium",      category: "Academic",   date: "Nov 14, 2024", time: "9:00 – 11:30 AM",    venue: "Whitman Hall, Rm 204",         code: "ENV-POL-2024",  checkInOpen: true  },
-  { id: "mu2", title: "Leadership Summit 2024",              category: "Leadership", date: "Nov 22, 2024", time: "10:00 AM – 4:00 PM",  venue: "Student Union, Main Hall",     code: "LDR-SUM-2024",  checkInOpen: false, checkInOpensAt: "Nov 22, 10:00 AM" },
-  { id: "mu3", title: "Tech Ethics Panel: AI in Academia",   category: "Academic",   date: "Nov 29, 2024", time: "4:00 – 6:00 PM",      venue: "Engineering Hall, Rm 101",     code: "TECH-ETH-2024", checkInOpen: false, checkInOpensAt: "Nov 29, 4:00 PM"  },
-  { id: "mu4", title: "Entrepreneurship Bootcamp",           category: "Career",     date: "Dec 10, 2024", time: "9:00 AM – 3:00 PM",   venue: "Business Hall, Conf. Center",  code: "ENT-BTC-2024",  checkInOpen: false, checkInOpensAt: "Dec 10, 9:00 AM"  },
-  { id: "mu5", title: "Winter Research Symposium",           category: "Research",   date: "Dec 18, 2024", time: "9:00 AM – 5:00 PM",   venue: "Library, Research Commons",    code: "WRS-2024",      checkInOpen: false, checkInOpensAt: "Dec 18, 9:00 AM"  },
-];
-
-const MY_PAST: MyRegisteredEvent[] = [
-  { id: "mp1", title: "Campus Sustainability Forum",         category: "Academic",   date: "Oct 8, 2024",  time: "10:00 AM – 1:00 PM", venue: "Whitman Hall, Rm 101",          code: "SUS-FOR-2024",  attended: true,  certIssued: true  },
-  { id: "mp2", title: "Research Methodology Bootcamp",       category: "Research",   date: "Oct 15, 2024", time: "9:00 AM – 3:00 PM",  venue: "Library, Study Room A",         code: "RES-MTH-2024",  attended: true,  certIssued: true  },
-  { id: "mp3", title: "Foundations of Data Science",         category: "Workshop",   date: "Oct 24, 2024", time: "2:00 – 5:00 PM",     venue: "Engineering Hall, Lab 3",       code: "DATA-SCI-2024", attended: true,  certIssued: false, certTemplateId: TEST_CERT_TEMPLATE_ID },
-  { id: "mp4", title: "Public Speaking Intensive",           category: "Workshop",   date: "Nov 1, 2024",  time: "1:00 – 4:00 PM",     venue: "Arts Building, Studio 1",       code: "SPK-INT-2024",  attended: true,  certIssued: false, certTemplateId: TEST_CERT_TEMPLATE_ID },
-  { id: "mp5", title: "Social Impact Hackathon",             category: "Leadership", date: "Nov 7, 2024",  time: "9:00 AM – 6:00 PM",  venue: "Student Union, Ground Floor",   code: "SOC-HACK-2024", attended: false, certIssued: false },
-];
-
-function EventInfoMeta({ ev }: { ev: MyRegisteredEvent }) {
+function EventInfoMeta({ ev }: { ev: { date: string; time: string; venue: string } }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#6B6355]">
       <div className="flex items-center gap-1.5">
@@ -1495,6 +1669,20 @@ function UpcomingRow({
   );
 }
 
+// A past event row renders equally from a mock MyRegisteredEvent or a real
+// AttendedEvent — both carry the fields EventInfoMeta/PastRow read
+// (category, title, date, time, venue, code, attended).
+type PastRowEvent = {
+  id: string;
+  title: string;
+  category: string;
+  date: string;
+  time: string;
+  venue: string;
+  code: string;
+  attended?: boolean;
+};
+
 function PastRow({
   ev,
   certGotten,
@@ -1502,7 +1690,7 @@ function PastRow({
   onGetCert,
   isGuest,
 }: {
-  ev: MyRegisteredEvent;
+  ev: PastRowEvent;
   certGotten: boolean;
   certUrl?: string;
   onGetCert: () => Promise<void>;
@@ -1730,14 +1918,55 @@ export function MyEventsScreen({
   // so PastRow can link straight to the generated PDF once issued.
   const [certUrls, setCertUrls] = useState<Record<string, string>>({});
 
-  async function handleGetCertificate(ev: MyRegisteredEvent) {
+  const studentName = profile?.fullName ?? "Sarah Chen";
+  const studentId   = profile?.id ?? "SCH-4421";
+
+  // Both tabs are now real:
+  //   Past     — attendance records (attendance_select_own RLS)
+  //   Upcoming — active registrations (registrations_select_own RLS),
+  //              replacing the former MY_UPCOMING mock.
+  const [pastEvents, setPastEvents]   = useState<AttendedEvent[]>([]);
+  const [pastLoading, setPastLoading] = useState(true);
+  const [pastError, setPastError]     = useState<string | null>(null);
+
+  const [upcomingEvents, setUpcomingEvents]   = useState<RegisteredEvent[]>([]);
+  const [upcomingLoading, setUpcomingLoading] = useState(true);
+  const [upcomingError, setUpcomingError]     = useState<string | null>(null);
+
+  useEffect(() => {
+    // Guests have no auth session / attendance rows — skip the query.
+    if (isGuest || !profile?.id) { setPastLoading(false); setUpcomingLoading(false); return; }
+    let cancelled = false;
+    (async () => {
+      setPastLoading(true);
+      setUpcomingLoading(true);
+      const [attResult, regResult] = await Promise.all([
+        listMyAttendance(profile.id),
+        listMyRegistrations(profile.id),
+      ]);
+      if (cancelled) return;
+      setPastLoading(false);
+      setUpcomingLoading(false);
+      if (attResult.status === "error") { setPastError(attResult.message); }
+      else { setPastError(null); setPastEvents(attResult.events); }
+      if (regResult.status === "error") { setUpcomingError(regResult.message); }
+      else { setUpcomingError(null); setUpcomingEvents(regResult.events); }
+    })();
+    return () => { cancelled = true; };
+  }, [isGuest, profile?.id]);
+
+  // Accepts any event carrying at least a title + optional certificate
+  // template id — works for both the mock MY_UPCOMING rows and real
+  // AttendedEvent rows (which have no template linkage yet, so issuance
+  // surfaces the "no template configured" message below).
+  async function handleGetCertificate(ev: { id: string; title: string; certTemplateId?: string }) {
     if (!ev.certTemplateId) {
       throw new Error("This event has no certificate template configured yet.");
     }
 
     const result = await generateCertificateWithRetry(
       {
-        studentName: profile?.fullName ?? "Sarah Chen",
+        studentName,
         eventTitle: ev.title,
         templateId: ev.certTemplateId,
         certificateCode: generateCertificateCode(),
@@ -1777,8 +2006,8 @@ export function MyEventsScreen({
     <AppShell
       activeNav="events"
       notifCount={3}
-      studentName={profile?.fullName ?? "Sarah Chen"}
-      studentId={profile?.id ?? "SCH-4421"}
+      studentName={studentName}
+      studentId={studentId}
       isGuest={isGuest}
       onNav={handleNav}
       onNavigate={onNavigate}
@@ -1814,7 +2043,7 @@ export function MyEventsScreen({
                       }`}
                       style={M}
                     >
-                      {t === "upcoming" ? MY_UPCOMING.length : MY_PAST.length}
+                      {t === "upcoming" ? upcomingEvents.length : pastEvents.length}
                     </span>
                   </button>
                 </div>
@@ -1842,7 +2071,22 @@ export function MyEventsScreen({
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.22, ease: "easeOut" }}
               >
-                {MY_UPCOMING.length === 0 ? (
+                {upcomingLoading ? (
+                  <div className="py-20 flex flex-col items-center text-center">
+                    <RefreshCw size={20} strokeWidth={1.5} className="text-[#DCD4C2] animate-spin mb-4" />
+                    <p className="text-sm text-[#6B6355]" style={{ fontFamily: "'Public Sans', system-ui, sans-serif" }}>
+                      Loading your registrations…
+                    </p>
+                  </div>
+                ) : upcomingError ? (
+                  <div className="py-20 flex flex-col items-center text-center">
+                    <div className="w-12 h-12 border border-[#B5432E]/40 rounded-[8px] flex items-center justify-center mb-5">
+                      <AlertTriangle size={20} strokeWidth={1.5} className="text-[#B5432E]" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-[#1E1B16] mb-2" style={F}>Couldn't load registrations.</h3>
+                    <p className="text-sm text-[#6B6355] max-w-xs leading-relaxed">{upcomingError}</p>
+                  </div>
+                ) : upcomingEvents.length === 0 ? (
                   <div className="py-20 flex flex-col items-center text-center">
                     <div className="w-12 h-12 border border-[#DCD4C2] rounded-[8px] flex items-center justify-center mb-5">
                       <Calendar size={20} strokeWidth={1.5} className="text-[#DCD4C2]" />
@@ -1860,7 +2104,7 @@ export function MyEventsScreen({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {MY_UPCOMING.map((ev, i) => (
+                    {upcomingEvents.map((ev, i) => (
                       <motion.div
                         key={ev.id}
                         initial={{ opacity: 0, y: 8 }}
@@ -1868,10 +2112,14 @@ export function MyEventsScreen({
                         transition={{ duration: 0.25, delay: i * 0.06, ease: "easeOut" }}
                       >
                         <UpcomingRow
-                          ev={ev}
+                          // Registration carries no check-in window; check-in is
+                          // always reachable via the scanner, which validates the
+                          // event's live/published status server-side (attendance
+                          // stays independent of registration).
+                          ev={{ ...ev, checkInOpen: true }}
                           checkedIn={checkedInIds.includes(ev.id)}
                           onCheckIn={() => {
-                            if (ev.checkInOpen && onScanEvent) {
+                            if (onScanEvent) {
                               onScanEvent(ev.id);
                             } else {
                               setCheckedInIds(p => [...p, ev.id]);
@@ -1892,7 +2140,22 @@ export function MyEventsScreen({
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.22, ease: "easeOut" }}
               >
-                {MY_PAST.length === 0 ? (
+                {pastLoading ? (
+                  <div className="py-20 flex flex-col items-center text-center">
+                    <RefreshCw size={20} strokeWidth={1.5} className="text-[#DCD4C2] animate-spin mb-4" />
+                    <p className="text-sm text-[#6B6355]" style={{ fontFamily: "'Public Sans', system-ui, sans-serif" }}>
+                      Loading your attendance history…
+                    </p>
+                  </div>
+                ) : pastError ? (
+                  <div className="py-20 flex flex-col items-center text-center">
+                    <div className="w-12 h-12 border border-[#B5432E]/40 rounded-[8px] flex items-center justify-center mb-5">
+                      <AlertTriangle size={20} strokeWidth={1.5} className="text-[#B5432E]" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-[#1E1B16] mb-2" style={F}>Couldn't load attendance.</h3>
+                    <p className="text-sm text-[#6B6355] max-w-xs leading-relaxed">{pastError}</p>
+                  </div>
+                ) : pastEvents.length === 0 ? (
                   <div className="py-20 flex flex-col items-center text-center">
                     <div className="w-12 h-12 border border-[#DCD4C2] rounded-[8px] flex items-center justify-center mb-5">
                       <Award size={20} strokeWidth={1.5} className="text-[#DCD4C2]" />
@@ -1904,7 +2167,7 @@ export function MyEventsScreen({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {MY_PAST.map((ev, i) => (
+                    {pastEvents.map((ev, i) => (
                       <motion.div
                         key={ev.id}
                         initial={{ opacity: 0, y: 8 }}
@@ -1913,7 +2176,7 @@ export function MyEventsScreen({
                       >
                         <PastRow
                           ev={ev}
-                          certGotten={certGottenIds.includes(ev.id) || !!ev.certIssued}
+                          certGotten={certGottenIds.includes(ev.id)}
                           certUrl={certUrls[ev.id]}
                           onGetCert={() => handleGetCertificate(ev)}
                           isGuest={isGuest}
@@ -1930,12 +2193,12 @@ export function MyEventsScreen({
           <div className="flex items-center justify-between pt-2 border-t border-[#DCD4C2]">
             <span className="text-[8px] text-[#DCD4C2]" style={M}>
               {tab === "upcoming"
-                ? `${MY_UPCOMING.length} upcoming registration${MY_UPCOMING.length !== 1 ? "s" : ""}`
-                : `${MY_PAST.filter(e => e.attended !== false).length} attended · ${MY_PAST.filter(e => e.attended === false).length} missed`}
+                ? `${upcomingEvents.length} upcoming registration${upcomingEvents.length !== 1 ? "s" : ""}`
+                : `${pastEvents.length} attended`}
             </span>
             {tab === "past" && (
               <span className="text-[8px] text-[#DCD4C2]" style={M}>
-                {MY_PAST.filter(e => e.attended !== false && (e.certIssued || certGottenIds.includes(e.id))).length} certificates issued
+                {pastEvents.filter(e => certGottenIds.includes(e.id)).length} certificates issued this session
               </span>
             )}
           </div>
@@ -2608,13 +2871,32 @@ type CertRecord = {
   organizer: string;
 };
 
-const CERT_RECORDS: CertRecord[] = [
-  { id: "cert-001", eventTitle: "Campus Sustainability Forum",     eventId: "",  category: "Academic",   issuedDate: "Oct 9, 2024",  certCode: "CERT-FB-2024-088021", dept: "Environmental Science",  organizer: "Prof. Andrei Volkov"       },
-  { id: "cert-002", eventTitle: "Research Methodology Bootcamp",   eventId: "",  category: "Research",   issuedDate: "Oct 16, 2024", certCode: "CERT-FB-2024-088476", dept: "Graduate School",         organizer: "Graduate Research Office"  },
-  { id: "cert-003", eventTitle: "Design Thinking Workshop",        eventId: "5", category: "Workshop",   issuedDate: "Nov 13, 2024", certCode: "CERT-FB-2024-089098", dept: "Arts & Design",           organizer: "Design Lab"                },
-  { id: "cert-004", eventTitle: "Leadership Primer Workshop",      eventId: "",  category: "Leadership", issuedDate: "Nov 6, 2024",  certCode: "CERT-FB-2024-088912", dept: "Student Life",            organizer: "Office of Student Affairs" },
-  { id: "cert-005", eventTitle: "Science Communication Seminar",   eventId: "",  category: "Academic",   issuedDate: "Sep 27, 2024", certCode: "CERT-FB-2024-087344", dept: "Graduate School",         organizer: "Dr. Maria Santos"          },
-];
+// Formats a certificates.issued_at ISO timestamp as "Nov 14, 2024" for
+// display. Falls back to the raw string if it can't be parsed.
+function formatIssuedDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+// Maps a real StudentCertificate (from lib/studentCertificates) onto the
+// CertRecord shape the certificate card/overlay/export already render.
+// `organizer` isn't part of the student certificate query (the certificates
+// table has no organizer field, and resolving it isn't needed for any
+// rendered element that matters here), so it's left blank and the overlay's
+// "dept · organizer" line simply shows the department.
+function toCertRecord(cert: StudentCertificate): CertRecord {
+  return {
+    id: cert.id,
+    eventTitle: cert.eventTitle,
+    eventId: cert.eventId,
+    category: cert.category,
+    issuedDate: formatIssuedDate(cert.issuedAt),
+    certCode: cert.certCode,
+    dept: cert.dept,
+    organizer: "",
+  };
+}
 
 const CERT_ACCENT: Record<string, string> = {
   Academic:   "#2E6B4C",
@@ -2625,7 +2907,7 @@ const CERT_ACCENT: Record<string, string> = {
 };
 
 // ─── Canvas-based certificate export ─────────────────────────────────────────
-async function downloadCertificate(cert: CertRecord) {
+async function downloadCertificate(cert: CertRecord, studentName: string) {
   await document.fonts.ready;
 
   const W = 1400;
@@ -2697,7 +2979,7 @@ async function downloadCertificate(cert: CertRecord) {
 
   // Student name
   ctx.font = `600 58px ${PS}`; ctx.fillStyle = "#1E1B16";
-  ctx.fillText("Sarah Chen", cx, y);
+  ctx.fillText(studentName, cx, y);
   y += 36;
 
   // "has attended and completed"
@@ -2757,10 +3039,12 @@ async function downloadCertificate(cert: CertRecord) {
 // ─── Certificate detail overlay ───────────────────────────────────────────────
 function CertDetailOverlay({
   cert,
+  studentName,
   onClose,
   onViewEvent,
 }: {
   cert: CertRecord;
+  studentName: string;
   onClose: () => void;
   onViewEvent?: () => void;
 }) {
@@ -2817,13 +3101,13 @@ function CertDetailOverlay({
 
             <div className="space-y-1.5">
               <p className="text-xs text-[#6B6355]">This certifies that</p>
-              <h2 className="text-[2rem] font-semibold text-[#1E1B16] leading-tight" style={F}>Sarah Chen</h2>
+              <h2 className="text-[2rem] font-semibold text-[#1E1B16] leading-tight" style={F}>{studentName}</h2>
               <p className="text-xs text-[#6B6355]">has attended and completed</p>
               <h3 className="text-[1.1rem] font-semibold text-[#1E1B16] leading-snug" style={F}>
                 {cert.eventTitle}
               </h3>
               <p className="text-[9px] text-[#6B6355]" style={M}>
-                {cert.dept} · {cert.organizer}
+                {cert.organizer ? `${cert.dept} · ${cert.organizer}` : cert.dept}
               </p>
             </div>
           </div>
@@ -2864,7 +3148,7 @@ function CertDetailOverlay({
           )}
           <div className="flex items-center gap-2">
             <button
-              onClick={() => downloadCertificate(cert)}
+              onClick={() => downloadCertificate(cert, studentName)}
               className="flex items-center gap-1.5 px-3.5 py-1.5 border border-[#DCD4C2] rounded-[6px] text-xs text-[#6B6355] hover:bg-[#FCFAF3] hover:border-[#1E1B16]/25 hover:text-[#1E1B16] transition-colors"
             >
               <Download size={11} strokeWidth={1.5} />
@@ -2890,10 +3174,12 @@ function CertDetailOverlay({
 function CertCard({
   cert,
   index,
+  studentName,
   onOpen,
 }: {
   cert: CertRecord;
   index: number;
+  studentName: string;
   onOpen: () => void;
 }) {
   const accent = CERT_ACCENT[cert.category] ?? "#6B6355";
@@ -2975,7 +3261,7 @@ function CertCard({
           <span className="text-[9px] text-[#6B6355]" style={M}>{cert.issuedDate}</span>
           <div className="flex items-center gap-1">
             <button
-              onClick={e => { e.stopPropagation(); downloadCertificate(cert); }}
+              onClick={e => { e.stopPropagation(); downloadCertificate(cert, studentName); }}
               className="w-7 h-7 flex items-center justify-center rounded-[5px] border border-[#DCD4C2] text-[#6B6355] hover:bg-[#F6F1E7] hover:text-[#1E1B16] hover:border-[#1E1B16]/30 transition-colors"
               aria-label="Download certificate as PNG"
             >
@@ -3013,6 +3299,32 @@ export function CertificatesScreen({
   const [query,        setQuery]        = useState("");
   const [selectedCert, setSelectedCert] = useState<CertRecord | null>(null);
 
+  // Real certificates for the signed-in student (certificates_select_own_student
+  // RLS). Replaces the old CERT_RECORDS mock array.
+  const [records, setRecords]           = useState<CertRecord[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [loadError, setLoadError]       = useState<string | null>(null);
+
+  const studentName = profile?.fullName ?? "Sarah Chen";
+  const studentId   = profile?.id ?? "SCH-4421";
+
+  useEffect(() => {
+    // Guests have no real profile row / auth session, so there are no
+    // certificates to fetch — show the empty state without a failing query.
+    if (isGuest || !profile?.id) { setLoading(false); return; }
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const result = await listMyCertificates(profile.id);
+      if (cancelled) return;
+      setLoading(false);
+      if (result.status === "error") { setLoadError(result.message); return; }
+      setLoadError(null);
+      setRecords(result.certificates.map(toCertRecord));
+    })();
+    return () => { cancelled = true; };
+  }, [isGuest, profile?.id]);
+
   function handleNav(id: string) {
     if (id === "profile")   { onNavigate("profile");   return; }
     if (id === "landing")   { onNavigate("landing");   return; }
@@ -3023,7 +3335,7 @@ export function CertificatesScreen({
     if (id === "notifs")    { onNavigate("notifs");    return; }
   }
 
-  const filtered = CERT_RECORDS.filter(c => {
+  const filtered = records.filter(c => {
     if (!query.trim()) return true;
     const q = query.toLowerCase();
     return (
@@ -3040,7 +3352,7 @@ export function CertificatesScreen({
         className="text-[8px] px-1.5 py-0.5 border border-[#DCD4C2] rounded-full text-[#6B6355]"
         style={M}
       >
-        {CERT_RECORDS.length}
+        {records.length}
       </span>
     </div>
   );
@@ -3050,8 +3362,8 @@ export function CertificatesScreen({
       <AppShell
         activeNav="certs"
         notifCount={3}
-        studentName={profile?.fullName ?? "Sarah Chen"}
-        studentId={profile?.id ?? "SCH-4421"}
+        studentName={studentName}
+        studentId={studentId}
         isGuest={isGuest}
         onNav={handleNav}
         onNavigate={onNavigate}
@@ -3080,7 +3392,7 @@ export function CertificatesScreen({
             </div>
 
             {/* ── Results meta ── */}
-            {query.trim() && (
+            {!loading && !loadError && query.trim() && (
               <div className="flex items-center justify-between">
                 <span className="text-[9px] text-[#6B6355]" style={M}>
                   {filtered.length} {filtered.length === 1 ? "certificate" : "certificates"} found
@@ -3095,8 +3407,34 @@ export function CertificatesScreen({
               </div>
             )}
 
+            {/* ── Loading state ── */}
+            {loading && (
+              <div className="py-20 flex flex-col items-center text-center">
+                <RefreshCw size={20} strokeWidth={1.5} className="text-[#DCD4C2] animate-spin mb-4" />
+                <p className="text-sm text-[#6B6355]" style={{ fontFamily: "'Public Sans', system-ui, sans-serif" }}>
+                  Loading your certificates…
+                </p>
+              </div>
+            )}
+
+            {/* ── Error state ── */}
+            {!loading && loadError && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25 }}
+                className="py-20 flex flex-col items-center text-center"
+              >
+                <div className="w-12 h-12 border border-[#B5432E]/40 rounded-[8px] flex items-center justify-center mb-5">
+                  <AlertTriangle size={20} strokeWidth={1.5} className="text-[#B5432E]" />
+                </div>
+                <h3 className="text-lg font-semibold text-[#1E1B16] mb-2" style={F}>Couldn't load certificates.</h3>
+                <p className="text-sm text-[#6B6355] max-w-xs leading-relaxed">{loadError}</p>
+              </motion.div>
+            )}
+
             {/* ── Empty state ── */}
-            {filtered.length === 0 && (
+            {!loading && !loadError && filtered.length === 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -3137,13 +3475,14 @@ export function CertificatesScreen({
             )}
 
             {/* ── Certificate grid ── */}
-            {filtered.length > 0 && (
+            {!loading && !loadError && filtered.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                 {filtered.map((cert, i) => (
                   <CertCard
                     key={cert.id}
                     cert={cert}
                     index={i}
+                    studentName={studentName}
                     onOpen={() => setSelectedCert(cert)}
                   />
                 ))}
@@ -3151,9 +3490,9 @@ export function CertificatesScreen({
             )}
 
             {/* ── Total tally ── */}
-            {filtered.length > 0 && !query.trim() && (
+            {!loading && !loadError && filtered.length > 0 && !query.trim() && (
               <p className="text-center text-[8px] text-[#DCD4C2]" style={M}>
-                {CERT_RECORDS.length} certificates · Sarah Chen · SCH-4421
+                {records.length} certificates · {studentName} · {studentId}
               </p>
             )}
 
@@ -3166,6 +3505,7 @@ export function CertificatesScreen({
         {selectedCert && (
           <CertDetailOverlay
             cert={selectedCert}
+            studentName={studentName}
             onClose={() => setSelectedCert(null)}
             onViewEvent={
               selectedCert.eventId && onViewEventDetail
@@ -3429,7 +3769,7 @@ export function StudentProfileScreen({ onNavigate, isGuest, profile }: { onNavig
         phone=""
         bio=""
         avatarUrl={profile?.avatarUrl}
-        accountId="SCH-4421"
+        accountId={profile?.id ?? "SCH-4421"}
         joinedDate="Sep 1, 2024"
         stats={[
           { label: "Certificates Earned", value: 1043 },

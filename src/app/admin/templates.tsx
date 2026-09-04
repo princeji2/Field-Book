@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
-import { F, M, dotGrid, type Screen, CertificateSeal, InlineSeal } from "../shared";
+import { F, M, dotGrid, type Screen, CertificateSeal } from "../shared";
 import { AdminAppShell } from "./shell";
 import { signOutUser, type AuthedProfile } from "../../lib/auth";
 import { uploadToBucket, buildObjectPath } from "../../lib/storage";
@@ -557,7 +557,6 @@ function TemplateEditor({
     onBack();
   }
 
-  const activeField = fields.find(f => f.id === activeFieldId) ?? null;
   const canvasH = Math.round(CANVAS_W / bgAspectRatio);
 
   const CustomCanvas = () => (

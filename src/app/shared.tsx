@@ -1,23 +1,15 @@
 import { useState, useEffect, useId, useRef, Component } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  QrCode, Award, BarChart3, Compass,
+  QrCode, Award, Compass,
   Check, ArrowRight, BookMarked,
-  Calendar, MapPin, GraduationCap,
-  ClipboardList, Settings2, ChevronRight,
-  Scan, Shield, ArrowLeft, Eye, EyeOff, Bell, Home, Search,
-  Download, Share2, X, Users, User, Plus, LogOut, Menu,
-  Upload, Pencil, Copy, TrendingUp, ChevronDown,
-  UserCheck, FileText, CheckCircle2, AlertTriangle, Settings, RefreshCw, ExternalLink,
-  XCircle, Clock, ChevronLeft, MessageSquare,
-  MoreHorizontal, UserPlus, Ban, ShieldCheck, Mail, Filter,
-  LayoutTemplate, Star, Eye as EyeIcon, Trash2, GripVertical, Move,
+  Calendar, MapPin,
+  ClipboardList,
+  Scan, Shield, ArrowLeft, Eye, EyeOff, Bell, Home,
+  User, LogOut, Menu,
+  AlertTriangle, RefreshCw,
+  Mail,
 } from "lucide-react";
-import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell,
-} from "recharts";
-import { toast, Toaster } from "sonner";
 import { signUpWithProfile, roleToScreen, signOutUser, getCurrentUserProfile, signInWithGoogle, verifySignupOtp, resendSignupOtp, requestPasswordReset, type SignupRole, type AuthedProfile } from "../lib/auth";
 
 // ─── Typography shorthand ───────────────────────────────────────────────────

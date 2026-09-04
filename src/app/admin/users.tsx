@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowLeft, Search, Check, X, Users, UserPlus, UserCheck, Ban, ShieldCheck, Mail, MoreHorizontal, Filter, RefreshCw } from "lucide-react";
+import { ArrowLeft, Search, Check, X, Users, UserPlus, UserCheck, Ban, ShieldCheck, Mail, MoreHorizontal, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { F, M, dotGrid, type Screen, CertificateSeal } from "../shared";
 import { AdminAppShell, ROLE_CONFIG, type UserRole } from "./shell";

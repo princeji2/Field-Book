@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useId } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { BookMarked, Eye, EyeOff, RefreshCw, ArrowLeft } from "lucide-react";
-import { toast } from "sonner";
 import { F, M, dotGrid, type Screen, CertificateSeal } from "../shared";
 import { AdminAppShell, ROLE_CONFIG, type UserRole } from "./shell";
 import { ENGAGEMENT_BY_ROLE } from "./analytics";
@@ -473,7 +472,6 @@ const DEMO_ROLE_OPTIONS: RoleOption[] = [
 export function AdminRoleConfirmScreen({
   onNavigate,
   onRoleSelect,
-  onGuestLogin,
   profile,
 }: {
   onNavigate: (s: Screen) => void;
