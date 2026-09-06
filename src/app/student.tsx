@@ -27,6 +27,12 @@ import {
   getActiveRegistrationCounts, type RegisteredEvent,
 } from "../lib/registrations";
 import {
+  listMyNotifications, getUnreadNotificationCount,
+  markNotificationRead, markAllNotificationsRead,
+  formatNotificationAge, groupNotificationByRecency,
+  type NotificationItem, type NotificationCategory,
+} from "../lib/notifications";
+import {
   type StudentEventCard,
   type EventRow,
   listStudentExploreEvents,
@@ -55,11 +61,19 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
   // in which case the cards fall back to a neutral placeholder rather than
   // a fabricated number.
   const [certCount, setCertCount]           = useState<number | null>(null);
+  // The most recently issued certificate (newest-first from
+  // listMyCertificates), driving the "Certificates" summary card's latest
+  // row. null = none issued yet / not loaded / guest — the card shows a
+  // neutral empty state rather than fabricated certificate details.
+  const [latestCert, setLatestCert]         = useState<StudentCertificate | null>(null);
   const [attendedCount, setAttendedCount]   = useState<number | null>(null);
   const [attendedRecent, setAttendedRecent] = useState<AttendedEvent[]>([]);
   // Real registrations (registrations_select_own RLS): drives the "Next Up"
   // card (soonest registered event).
   const [registeredEvents, setRegisteredEvents] = useState<RegisteredEvent[]>([]);
+  // Real notifications (notifications_select_own RLS): drives the dashboard
+  // "Recent Activity" strip. Empty for guests / before load.
+  const [recentNotifs, setRecentNotifs] = useState<NotifItem[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,19 +91,26 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
     if (isGuest || !profile?.id) return;
     let cancelled = false;
     (async () => {
-      const [certResult, attResult, regResult] = await Promise.all([
+      const [certResult, attResult, regResult, notifResult] = await Promise.all([
         listMyCertificates(profile.id),
         listMyAttendance(profile.id),
         listMyRegistrations(profile.id),
+        listMyNotifications(profile.id),
       ]);
       if (cancelled) return;
-      if (certResult.status === "success") setCertCount(certResult.certificates.length);
+      if (certResult.status === "success") {
+        setCertCount(certResult.certificates.length);
+        setLatestCert(certResult.certificates[0] ?? null);
+      }
       if (attResult.status === "success") {
         setAttendedCount(attResult.events.length);
         setAttendedRecent(attResult.events.slice(0, 3));
       }
       if (regResult.status === "success") {
         setRegisteredEvents(regResult.events);
+      }
+      if (notifResult.status === "success") {
+        setRecentNotifs(notifResult.notifications.slice(0, 4).map(toNotifItem));
       }
     })();
     return () => { cancelled = true; };
@@ -100,6 +121,8 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
   const nextUp = registeredEvents.length > 0
     ? [...registeredEvents].sort((a, b) => (a.eventDate ?? "").localeCompare(b.eventDate ?? ""))[0]
     : null;
+
+  const notifCount = useUnreadNotifCount(profile?.id, isGuest);
 
   function handleNav(id: string) {
     if (id === "profile")  { onNavigate?.("profile");  return; }
@@ -115,7 +138,7 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
   return (
     <AppShell
       activeNav={activeNav}
-      notifCount={3}
+      notifCount={notifCount}
       studentName={studentName}
       studentId={studentId}
       isGuest={isGuest}
@@ -278,20 +301,31 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
                   <CertificateSeal size={44} rotate={-8} delay={0.5} />
                 </div>
                 <div className="px-5 py-3">
-                  <div className="text-[10px] font-semibold text-[#1E1B16] leading-snug mb-0.5" style={F}>
-                    Environmental Policy Symposium
-                  </div>
-                  <div className="text-[9px] text-[#6B6355] mb-2" style={M}>
-                    CERT-FB-2024-089142 · Nov 14
-                  </div>
-                  <div className="inline-flex items-center gap-1 px-2 py-0.5 border border-[#2E6B4C] rounded-full">
-                    <span className="w-1 h-1 rounded-full bg-[#2E6B4C]" />
-                    <span className="text-[7px] text-[#2E6B4C]" style={M}>Verified</span>
-                  </div>
+                  {latestCert ? (
+                    <>
+                      <div className="text-[10px] font-semibold text-[#1E1B16] leading-snug mb-0.5" style={F}>
+                        {latestCert.eventTitle}
+                      </div>
+                      <div className="text-[9px] text-[#6B6355] mb-2" style={M}>
+                        {latestCert.certCode} · {formatIssuedDate(latestCert.issuedAt)}
+                      </div>
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 border border-[#2E6B4C] rounded-full">
+                        <span className="w-1 h-1 rounded-full bg-[#2E6B4C]" />
+                        <span className="text-[7px] text-[#2E6B4C]" style={M}>Verified</span>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-[9px] text-[#9C8E7E] py-1" style={M}>
+                      No certificates yet.
+                    </p>
+                  )}
                 </div>
                 <div className="border-t border-[#DCD4C2] px-5 py-2.5">
-                  <button className="text-xs text-[#6B6355] hover:text-[#1E1B16] transition-colors">
-                    Download latest →
+                  <button
+                    onClick={() => onNavigate?.("certs")}
+                    className="text-xs text-[#6B6355] hover:text-[#1E1B16] transition-colors"
+                  >
+                    {latestCert ? "View latest →" : "View certificates →"}
                   </button>
                 </div>
               </motion.div>
@@ -343,38 +377,17 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
             >
               <div className="px-5 py-4 border-b border-[#DCD4C2] flex items-center justify-between">
                 <p className="text-[9px] tracking-widest uppercase text-[#6B6355]" style={M}>Recent Activity</p>
-                <span className="text-[9px] text-[#6B6355]" style={M}>3 unread</span>
+                {recentNotifs.filter(n => n.unread).length > 0 && (
+                  <span className="text-[9px] text-[#6B6355]" style={M}>
+                    {recentNotifs.filter(n => n.unread).length} unread
+                  </span>
+                )}
               </div>
-              {[
-                {
-                  icon: Award,
-                  text: "Certificate issued for Design Thinking Workshop.",
-                  meta: "CERT-FB-2024-089098",
-                  time: "2h ago",
-                  unread: true,
-                },
-                {
-                  icon: Calendar,
-                  text: "Reminder: Environmental Policy Symposium tomorrow at 9:00 AM.",
-                  meta: "ENV-POL-2024",
-                  time: "5h ago",
-                  unread: true,
-                },
-                {
-                  icon: Compass,
-                  text: "Urban Ecology Workshop registration is now open — 12 spots remain.",
-                  meta: "BIO-ECO-2024",
-                  time: "Yesterday",
-                  unread: true,
-                },
-                {
-                  icon: Check,
-                  text: "Attendance confirmed: Leadership Primer Workshop.",
-                  meta: "LDR-PRM-2024",
-                  time: "Nov 5",
-                  unread: false,
-                },
-              ].map(({ icon: Icon, text, meta, time, unread }, i, arr) => (
+              {recentNotifs.length === 0 ? (
+                <div className="px-5 py-6 text-center">
+                  <p className="text-[10px] text-[#9C8E7E]" style={M}>No recent activity yet.</p>
+                </div>
+              ) : recentNotifs.map(({ icon: Icon, text, meta, time, unread }, i, arr) => (
                 <div
                   key={i}
                   className={`px-5 py-4 flex items-start gap-3.5 ${i < arr.length - 1 ? "border-b border-[#DCD4C2]" : ""}`}
@@ -383,7 +396,7 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
                     <Icon
                       size={13}
                       strokeWidth={1.5}
-                      style={{ color: unread ? "#E2A23B" : "#6B6355" }}
+                      color={unread ? "#E2A23B" : "#6B6355"}
                     />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -830,11 +843,13 @@ export function EventDetailScreen({
     if (id === "notifs")    { onNavigate("notifs");    return; }
   };
 
+  const notifCount = useUnreadNotifCount(profile?.id, isGuest);
+
   if (loadError || !ev) {
     return (
       <AppShell
         activeNav="explore"
-        notifCount={3}
+        notifCount={notifCount}
         studentName={profile?.fullName ?? "Sarah Chen"}
         studentId={profile?.id ?? "SCH-4421"}
         isGuest={isGuest}
@@ -854,7 +869,7 @@ export function EventDetailScreen({
   return (
     <AppShell
       activeNav="explore"
-      notifCount={3}
+      notifCount={notifCount}
       studentName={profile?.fullName ?? "Sarah Chen"}
       studentId={profile?.id ?? "SCH-4421"}
       isGuest={isGuest}
@@ -1261,6 +1276,8 @@ export function ExploreScreen({
     setQuery(""); setCategory("All"); setDateFilter("All Dates"); setLiveOnly(false); setVisibleCount(6);
   }
 
+  const notifCount = useUnreadNotifCount(profile?.id, isGuest);
+
   const topSearch = (
     <div className="flex items-center gap-2.5 px-3 py-1.5 bg-[#FCFAF3] border border-[#DCD4C2] rounded-[7px] w-72">
       <Search size={13} strokeWidth={1.5} className="text-[#6B6355] flex-shrink-0" />
@@ -1277,7 +1294,7 @@ export function ExploreScreen({
   return (
     <AppShell
       activeNav={activeNav}
-      notifCount={3}
+      notifCount={notifCount}
       studentName={profile?.fullName ?? "Sarah Chen"}
       studentId={profile?.id ?? "SCH-4421"}
       isGuest={isGuest}
@@ -2002,10 +2019,12 @@ export function MyEventsScreen({
     <span className="text-sm font-semibold text-[#1E1B16]" style={F}>My Events</span>
   );
 
+  const notifCount = useUnreadNotifCount(profile?.id, isGuest);
+
   return (
     <AppShell
       activeNav="events"
-      notifCount={3}
+      notifCount={notifCount}
       studentName={studentName}
       studentId={studentId}
       isGuest={isGuest}
@@ -3357,11 +3376,13 @@ export function CertificatesScreen({
     </div>
   );
 
+  const notifCount = useUnreadNotifCount(profile?.id, isGuest);
+
   return (
     <>
       <AppShell
         activeNav="certs"
-        notifCount={3}
+        notifCount={notifCount}
         studentName={studentName}
         studentId={studentId}
         isGuest={isGuest}
@@ -3525,9 +3546,37 @@ export function CertificatesScreen({
 // ─── Notifications ────────────────────────────────────────────────────────────
 
 
+// Maps a notification category to the Lucide icon the row renders. Keeps the
+// same icon vocabulary the old mock used (Award for certificates, Check for
+// confirmations, X for cancellations, Calendar for reminders, Bell as the
+// general fallback), so the UI is visually unchanged.
+type NotifIcon = React.ComponentType<{ size?: number; strokeWidth?: number; color?: string }>;
+function notificationIcon(category: NotificationCategory | string): NotifIcon {
+  switch (category) {
+    case "certificate_issued":      return Award;
+    case "registration_confirmed":  return Check;
+    case "registration_cancelled":  return X;
+    case "attendance_confirmed":    return Check;
+    case "event_reminder":          return Calendar;
+    default:                        return Bell;
+  }
+}
+
+// Derives the mono "eyebrow" line (the old `meta` field) from a
+// notification's metadata. Server-generated rows carry a `code` (e.g. the
+// certificate code) in metadata; fall back to a neutral label when absent so
+// the row never shows a fabricated id.
+function notificationMeta(n: NotificationItem): string {
+  const code = n.metadata && typeof n.metadata.code === "string" ? n.metadata.code : null;
+  if (code) return code;
+  return "FIELDBOOK";
+}
+
+// UI-side view model for a notification row. Mirrors the fields NotifRow
+// reads; `unread` is derived from the stored `read` flag.
 type NotifItem = {
   id: string;
-  icon: React.ComponentType<{ size?: number; strokeWidth?: number; color?: string }>;
+  icon: NotifIcon;
   text: string;
   meta: string;
   group: NotifGroup;
@@ -3535,21 +3584,41 @@ type NotifItem = {
   unread: boolean;
 };
 
-const NOTIFS: NotifItem[] = [
-  // Today — 2 unread, 1 read (matches dashboard notifCount=3 across app)
-  { id: "n1",  icon: Award,    text: "Certificate issued for Design Thinking Workshop.",                   meta: "CERT-FB-2024-089098", group: "today",  time: "2h ago",     unread: true  },
-  { id: "n2",  icon: Calendar, text: "Reminder: Environmental Policy Symposium tomorrow at 9:00 AM.",      meta: "ENV-POL-2024",        group: "today",  time: "5h ago",     unread: true  },
-  { id: "n3",  icon: Check,    text: "Registration confirmed: Biotechnology & Society Conference.",         meta: "ENT-BTC-2024",        group: "today",  time: "8h ago",     unread: false },
-  // Earlier this week — 1 unread, 2 read
-  { id: "n4",  icon: Compass,  text: "Urban Ecology Workshop registration is now open — 12 spots remain.", meta: "BIO-ECO-2024",        group: "week",   time: "Yesterday",  unread: true  },
-  { id: "n5",  icon: QrCode,   text: "Your QR check-in pass for Urban Ecology Workshop is ready.",         meta: "BIO-ECO-2024",        group: "week",   time: "2 days ago", unread: false },
-  { id: "n6",  icon: Calendar, text: "Reminder: Leadership Summit registration closes in 24 hours.",        meta: "LDR-SUM-2024",        group: "week",   time: "3 days ago", unread: false },
-  // Older — all read
-  { id: "n7",  icon: Check,    text: "Attendance confirmed: Leadership Primer Workshop.",                   meta: "LDR-PRM-2024",        group: "older",  time: "Nov 5",      unread: false },
-  { id: "n8",  icon: Award,    text: "New certificate issued: Research Methodology Bootcamp.",              meta: "CERT-FB-2024-088476", group: "older",  time: "Oct 16",     unread: false },
-  { id: "n9",  icon: Award,    text: "New certificate issued: Public Speaking Intensive.",                  meta: "CERT-FB-2024-088021", group: "older",  time: "Oct 9",      unread: false },
-  { id: "n10", icon: Shield,   text: "Your Fieldbook participation ledger record has been updated.",        meta: "LEDGER-SCH-4421",     group: "older",  time: "Oct 1",      unread: false },
-];
+// Flattens a real NotificationItem into the NotifItem shape the existing
+// NotifRow / grouping UI consumes — no visual change, just a data source
+// swap from the former hardcoded NOTIFS array.
+function toNotifItem(n: NotificationItem): NotifItem {
+  return {
+    id: n.id,
+    icon: notificationIcon(n.category),
+    text: n.message,
+    meta: notificationMeta(n),
+    group: groupNotificationByRecency(n.createdAt),
+    time: formatNotificationAge(n.createdAt),
+    unread: !n.read,
+  };
+}
+
+/**
+ * Live unread-notification count for the signed-in student, shared by every
+ * student AppShell (nav badge + top-bar dot). Guests / not-yet-loaded return
+ * 0 — same isGuest short-circuit every other real-data fetch in this file
+ * uses. Best-effort: a failed count silently stays 0 rather than surfacing
+ * an error on unrelated screens.
+ */
+function useUnreadNotifCount(profileId: string | undefined, isGuest?: boolean): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (isGuest || !profileId) { setCount(0); return; }
+    let cancelled = false;
+    (async () => {
+      const result = await getUnreadNotificationCount(profileId);
+      if (!cancelled && result.status === "success") setCount(result.count);
+    })();
+    return () => { cancelled = true; };
+  }, [profileId, isGuest]);
+  return count;
+}
 
 
 function NotifRow({
@@ -3616,6 +3685,29 @@ export function NotificationsScreen({ onNavigate, isGuest, profile }: { onNaviga
   const [activeNav, setActiveNav] = useState("notifs");
   const [readIds,   setReadIds]   = useState<string[]>([]);
 
+  // Real notifications for the signed-in student (notifications_select_own
+  // RLS). Replaces the former hardcoded NOTIFS array. null-safe empty on
+  // guest sessions, matching every other student real-data fetch here.
+  const [notifs,    setNotifs]    = useState<NotifItem[]>([]);
+  const [loading,   setLoading]   = useState(!isGuest);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Guests have no auth session / real profile row — nothing to fetch.
+    if (isGuest || !profile?.id) { setLoading(false); return; }
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const result = await listMyNotifications(profile.id);
+      if (cancelled) return;
+      setLoading(false);
+      if (result.status === "error") { setLoadError(result.message); return; }
+      setLoadError(null);
+      setNotifs(result.notifications.map(toNotifItem));
+    })();
+    return () => { cancelled = true; };
+  }, [isGuest, profile?.id]);
+
   function handleNav(id: string) {
     if (id === "profile")   { onNavigate("profile");   return; }
     if (id === "landing")   { onNavigate("landing");   return; }
@@ -3627,8 +3719,22 @@ export function NotificationsScreen({ onNavigate, isGuest, profile }: { onNaviga
     setActiveNav(id);
   }
 
-  const unreadCount = NOTIFS.filter(n => n.unread && !readIds.includes(n.id)).length;
-  const indexed = NOTIFS.map((n, i) => ({ notif: n, delay: 0.06 + i * 0.045 }));
+  // Optimistically flip a single row read locally, then persist. On failure
+  // the local flip is left in place (best-effort, consistent with the rest
+  // of the app's read-state handling) — a reload reflects the true state.
+  function handleReadOne(id: string) {
+    setReadIds(prev => prev.includes(id) ? prev : [...prev, id]);
+    void markNotificationRead(id);
+  }
+
+  function handleMarkAllRead() {
+    if (!profile?.id) return;
+    setReadIds(notifs.map(n => n.id));
+    void markAllNotificationsRead(profile.id);
+  }
+
+  const unreadCount = notifs.filter(n => n.unread && !readIds.includes(n.id)).length;
+  const indexed = notifs.map((n, i) => ({ notif: n, delay: 0.06 + i * 0.045 }));
 
   return (
     <AppShell
@@ -3659,7 +3765,7 @@ export function NotificationsScreen({ onNavigate, isGuest, profile }: { onNaviga
               {unreadCount} unread
             </p>
           )}
-          {unreadCount === 0 && NOTIFS.some(n => n.unread) && (
+          {unreadCount === 0 && notifs.some(n => n.unread) && (
             <p className="mt-[5px] text-[12px]" style={{ fontFamily: "'Public Sans', system-ui, sans-serif", color: "#9C8E7E" }}>
               All caught up
             </p>
@@ -3670,7 +3776,7 @@ export function NotificationsScreen({ onNavigate, isGuest, profile }: { onNaviga
             type="button"
             className="mt-1 text-[12px] text-[#6B6355] hover:text-[#1E1B16] transition-colors pb-px disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ fontFamily: "'Public Sans', system-ui, sans-serif", borderBottom: "1px solid rgba(107,99,85,0.4)" }}
-            onClick={() => setReadIds(NOTIFS.map(n => n.id))}
+            onClick={handleMarkAllRead}
             disabled={isGuest}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -3681,8 +3787,38 @@ export function NotificationsScreen({ onNavigate, isGuest, profile }: { onNaviga
         )}
       </motion.div>
 
+      {/* Loading state */}
+      {loading && (
+        <div className="py-24 flex flex-col items-center text-center">
+          <RefreshCw size={20} strokeWidth={1.5} className="text-[#DCD4C2] animate-spin mb-4" />
+          <p className="text-[13px]" style={{ fontFamily: "'Public Sans', system-ui, sans-serif", color: "#9C8E7E" }}>
+            Loading your notifications…
+          </p>
+        </div>
+      )}
+
+      {/* Error state */}
+      {!loading && loadError && (
+        <motion.div
+          className="flex flex-col items-center py-24 text-center"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+        >
+          <span className="w-14 h-14 rounded-[8px] border border-[#B5432E]/40 flex items-center justify-center mb-5">
+            <AlertTriangle size={22} strokeWidth={1.3} color="#B5432E" />
+          </span>
+          <p className="text-[18px] text-[#1E1B16] mb-2" style={F}>
+            {"Couldn't load notifications"}
+          </p>
+          <p className="text-[13px] max-w-[240px] leading-[1.55]" style={{ fontFamily: "'Public Sans', system-ui, sans-serif", color: "#9C8E7E" }}>
+            {loadError}
+          </p>
+        </motion.div>
+      )}
+
       {/* Notification list / empty state */}
-      {NOTIFS.length === 0 ? (
+      {!loading && !loadError && (notifs.length === 0 ? (
         <motion.div
           className="flex flex-col items-center py-24 text-center"
           initial={{ opacity: 0, y: 8 }}
@@ -3729,7 +3865,7 @@ export function NotificationsScreen({ onNavigate, isGuest, profile }: { onNaviga
                     key={notif.id}
                     notif={notif}
                     isRead={readIds.includes(notif.id)}
-                    onRead={() => setReadIds(prev => prev.includes(notif.id) ? prev : [...prev, notif.id])}
+                    onRead={() => handleReadOne(notif.id)}
                     delay={delay}
                   />
                 ))}
@@ -3737,13 +3873,50 @@ export function NotificationsScreen({ onNavigate, isGuest, profile }: { onNaviga
             );
           })}
         </motion.div>
-      )}
+      ))}
     </AppShell>
   );
 }
 
 // ─── Student profile screen wrapper ───────────────────────────────────────────
+// Formats profiles.member_since (ISO) as the profile "Member since / Joined"
+// display date, e.g. "Sep 1, 2024". Mirrors the format used elsewhere
+// (formatJoined in admin/users.ts). Falls back to a neutral placeholder if
+// the timestamp is missing/unparseable (e.g. guest session).
+function formatJoinedDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 export function StudentProfileScreen({ onNavigate, isGuest, profile }: { onNavigate?: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
+  // Real profile statistics. null = not yet loaded / unavailable (guest),
+  // in which case the stat falls back to a neutral placeholder rather than a
+  // fabricated number — same convention as StudentDashboard's counts. Both
+  // counts reuse the existing Stage 1/2 helpers (listMyCertificates /
+  // listMyAttendance); no new queries are introduced here.
+  const [certCount, setCertCount]         = useState<number | null>(null);
+  const [attendedCount, setAttendedCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    // Guests have no auth session / real profile row — leave counts as null.
+    if (isGuest || !profile?.id) return;
+    let cancelled = false;
+    (async () => {
+      const [certResult, attResult] = await Promise.all([
+        listMyCertificates(profile.id),
+        listMyAttendance(profile.id),
+      ]);
+      if (cancelled) return;
+      if (certResult.status === "success") setCertCount(certResult.certificates.length);
+      if (attResult.status === "success")  setAttendedCount(attResult.events.length);
+    })();
+    return () => { cancelled = true; };
+  }, [isGuest, profile?.id]);
+
+  const joinedDate = formatJoinedDate(profile?.memberSince);
+
   return (
     <AppShell
       activeNav=""
@@ -3770,11 +3943,10 @@ export function StudentProfileScreen({ onNavigate, isGuest, profile }: { onNavig
         bio=""
         avatarUrl={profile?.avatarUrl}
         accountId={profile?.id ?? "SCH-4421"}
-        joinedDate="Sep 1, 2024"
+        joinedDate={joinedDate}
         stats={[
-          { label: "Certificates Earned", value: 1043 },
-          { label: "Events Attended",     value: 2190 },
-          { label: "Sessions",            value: 3841 },
+          { label: "Certificates Earned", value: certCount ?? "—" },
+          { label: "Events Attended",     value: attendedCount ?? "—" },
         ]}
         onBack={() => onNavigate?.("dashboard")}
         isGuest={isGuest}

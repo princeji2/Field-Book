@@ -19,6 +19,8 @@ export interface AuthedProfile {
   email: string;
   role: AppRole;
   avatarUrl: string | null;
+  /** ISO timestamp from profiles.member_since — the account's join date. */
+  memberSince: string;
 }
 
 /** Maps a profile role to that role's existing dashboard screen. */
@@ -50,7 +52,7 @@ export async function getCurrentUserProfile(): Promise<AuthedProfile | null> {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, full_name, email, role, avatar_url")
+    .select("id, full_name, email, role, avatar_url, member_since")
     .eq("id", user.id)
     .single();
 
@@ -62,6 +64,7 @@ export async function getCurrentUserProfile(): Promise<AuthedProfile | null> {
     email: data.email as string,
     role: data.role as AppRole,
     avatarUrl: (data.avatar_url as string | null) ?? null,
+    memberSince: data.member_since as string,
   };
 }
 

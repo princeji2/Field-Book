@@ -187,6 +187,7 @@ grant execute on function public.register_for_event(uuid) to authenticated;
 create or replace function public.cancel_registration(p_event_id uuid)
 returns void
 language sql
+set search_path = public
 as $$
   update public.registrations
     set status = 'cancelled', cancelled_at = now()
