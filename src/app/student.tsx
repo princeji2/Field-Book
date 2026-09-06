@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useId, useCallback } from "react";
+import React, { useState, useEffect, useRef, useId, useCallback, useMemo, useSyncExternalStore } from "react";
 import jsQR from "jsqr";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -110,7 +110,10 @@ export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?
         setRegisteredEvents(regResult.events);
       }
       if (notifResult.status === "success") {
-        setRecentNotifs(notifResult.notifications.slice(0, 4).map(toNotifItem));
+        // Merge real + demo rows chronologically, then take the latest 4 for
+        // the strip (same demo seed the Notifications screen shows).
+        const merged = mergeNotifs(notifResult.notifications.map(toNotifItem), buildDemoNotifs());
+        setRecentNotifs(merged.slice(0, 4));
       }
     })();
     return () => { cancelled = true; };
@@ -3573,7 +3576,12 @@ function notificationMeta(n: NotificationItem): string {
 }
 
 // UI-side view model for a notification row. Mirrors the fields NotifRow
-// reads; `unread` is derived from the stored `read` flag.
+// reads; `unread` is derived from the stored `read` flag (real) or the
+// static seed (demo).
+//   sortTs — epoch ms used to interleave demo + real rows chronologically.
+//   isDemo — true for the static seed rows below; keeps their read state
+//            local-only (never persisted to Supabase) so real rows retain
+//            their authoritative Supabase read/unread state.
 type NotifItem = {
   id: string;
   icon: NotifIcon;
@@ -3582,12 +3590,15 @@ type NotifItem = {
   group: NotifGroup;
   time: string;
   unread: boolean;
+  sortTs: number;
+  isDemo: boolean;
 };
 
 // Flattens a real NotificationItem into the NotifItem shape the existing
 // NotifRow / grouping UI consumes — no visual change, just a data source
 // swap from the former hardcoded NOTIFS array.
 function toNotifItem(n: NotificationItem): NotifItem {
+  const ts = new Date(n.createdAt).getTime();
   return {
     id: n.id,
     icon: notificationIcon(n.category),
@@ -3596,7 +3607,98 @@ function toNotifItem(n: NotificationItem): NotifItem {
     group: groupNotificationByRecency(n.createdAt),
     time: formatNotificationAge(n.createdAt),
     unread: !n.read,
+    sortTs: Number.isNaN(ts) ? 0 : ts,
+    isDemo: false,
   };
+}
+
+// ── Demo notifications ────────────────────────────────────────────────────
+// The original static seed feed, retained so the notifications surface never
+// looks empty in a fresh/demo account and continues to showcase the range of
+// notification types. These are NOT stored in Supabase: their read state is
+// purely local (handled via readIds), and they never trigger a Supabase
+// write. Each carries a real epoch timestamp (now minus a fixed offset) so it
+// interleaves chronologically with real rows; group/time are derived from
+// that timestamp with the same helpers real rows use, so both read
+// identically. Prefixed ids ("demo-…") keep them from ever colliding with a
+// real notification uuid.
+const HOUR = 3_600_000, DAY = 86_400_000;
+type DemoSeed = { id: string; icon: NotifIcon; text: string; meta: string; ageMs: number; unread: boolean };
+const DEMO_SEED: DemoSeed[] = [
+  { id: "demo-1",  icon: Award,    text: "Certificate issued for Design Thinking Workshop.",                   meta: "CERT-FB-2024-089098", ageMs: 2 * HOUR,  unread: true  },
+  { id: "demo-2",  icon: Calendar, text: "Reminder: Environmental Policy Symposium tomorrow at 9:00 AM.",      meta: "ENV-POL-2024",        ageMs: 5 * HOUR,  unread: true  },
+  { id: "demo-3",  icon: Check,    text: "Registration confirmed: Biotechnology & Society Conference.",         meta: "ENT-BTC-2024",        ageMs: 8 * HOUR,  unread: false },
+  { id: "demo-4",  icon: Compass,  text: "Urban Ecology Workshop registration is now open — 12 spots remain.", meta: "BIO-ECO-2024",        ageMs: 1 * DAY,   unread: true  },
+  { id: "demo-5",  icon: QrCode,   text: "Your QR check-in pass for Urban Ecology Workshop is ready.",         meta: "BIO-ECO-2024",        ageMs: 2 * DAY,   unread: false },
+  { id: "demo-6",  icon: Calendar, text: "Reminder: Leadership Summit registration closes in 24 hours.",        meta: "LDR-SUM-2024",        ageMs: 3 * DAY,   unread: false },
+  { id: "demo-7",  icon: Check,    text: "Attendance confirmed: Leadership Primer Workshop.",                   meta: "LDR-PRM-2024",        ageMs: 30 * DAY,  unread: false },
+  { id: "demo-8",  icon: Award,    text: "New certificate issued: Research Methodology Bootcamp.",              meta: "CERT-FB-2024-088476", ageMs: 45 * DAY,  unread: false },
+  { id: "demo-9",  icon: Award,    text: "New certificate issued: Public Speaking Intensive.",                  meta: "CERT-FB-2024-088021", ageMs: 60 * DAY,  unread: false },
+  { id: "demo-10", icon: Shield,   text: "Your Fieldbook participation ledger record has been updated.",        meta: "LEDGER-SCH-4421",     ageMs: 75 * DAY,  unread: false },
+];
+
+// Ids of demo rows that START unread — the set whose read/unread state the
+// badge tracks. Marking one of these read reduces the badge; the
+// already-read demo rows never contributed to the count in the first place.
+const DEMO_UNREAD_IDS = new Set(DEMO_SEED.filter(s => s.unread).map(s => s.id));
+
+// ── Shared demo read-state store ───────────────────────────────────────────
+// Demo notifications are never persisted to Supabase, but their read state
+// must be visible to BOTH the notifications list (per-row / mark-all) AND the
+// unread badge rendered by every student AppShell. A tiny module-level store
+// with useSyncExternalStore subscribers keeps those in sync in-session
+// without any backend write. Session-scoped only (resets on reload), which
+// matches "demo keeps its local/static behavior".
+const demoReadIds = new Set<string>();
+const demoReadListeners = new Set<() => void>();
+
+function subscribeDemoRead(cb: () => void): () => void {
+  demoReadListeners.add(cb);
+  return () => { demoReadListeners.delete(cb); };
+}
+function markDemoRead(ids: string[]): void {
+  let changed = false;
+  for (const id of ids) {
+    if (!demoReadIds.has(id)) { demoReadIds.add(id); changed = true; }
+  }
+  if (changed) demoReadListeners.forEach(cb => cb());
+}
+// Snapshot = how many initially-unread demo rows are still unread.
+function demoUnreadSnapshot(): number {
+  let n = 0;
+  for (const id of DEMO_UNREAD_IDS) if (!demoReadIds.has(id)) n++;
+  return n;
+}
+
+// Live count of demo notifications still unread this session, shared across
+// every screen via the module-level store above.
+function useDemoUnreadCount(): number {
+  return useSyncExternalStore(subscribeDemoRead, demoUnreadSnapshot, demoUnreadSnapshot);
+}
+
+// Builds the demo NotifItems at call time so their relative "time"/group
+// stay fresh across a long-lived session.
+function buildDemoNotifs(): NotifItem[] {
+  const now = Date.now();
+  return DEMO_SEED.map(s => {
+    const iso = new Date(now - s.ageMs).toISOString();
+    return {
+      id: s.id,
+      icon: s.icon,
+      text: s.text,
+      meta: s.meta,
+      group: groupNotificationByRecency(iso),
+      time: formatNotificationAge(iso),
+      unread: s.unread,
+      sortTs: now - s.ageMs,
+      isDemo: true,
+    };
+  });
+}
+
+// Merges real + demo rows into one newest-first list by timestamp.
+function mergeNotifs(real: NotifItem[], demo: NotifItem[]): NotifItem[] {
+  return [...real, ...demo].sort((a, b) => b.sortTs - a.sortTs);
 }
 
 /**
@@ -3607,17 +3709,23 @@ function toNotifItem(n: NotificationItem): NotifItem {
  * an error on unrelated screens.
  */
 function useUnreadNotifCount(profileId: string | undefined, isGuest?: boolean): number {
-  const [count, setCount] = useState(0);
+  // Real unread comes from Supabase (authoritative, unaffected by demo). The
+  // demo contribution is the live count of still-unread demo rows from the
+  // shared store, so marking a demo notification read on the notifications
+  // screen immediately drops the badge here too — without ever writing a
+  // demo row to Supabase.
+  const [realCount, setRealCount] = useState(0);
+  const demoUnread = useDemoUnreadCount();
   useEffect(() => {
-    if (isGuest || !profileId) { setCount(0); return; }
+    if (isGuest || !profileId) { setRealCount(0); return; }
     let cancelled = false;
     (async () => {
       const result = await getUnreadNotificationCount(profileId);
-      if (!cancelled && result.status === "success") setCount(result.count);
+      if (!cancelled && result.status === "success") setRealCount(result.count);
     })();
     return () => { cancelled = true; };
   }, [profileId, isGuest]);
-  return count;
+  return realCount + demoUnread;
 }
 
 
@@ -3683,17 +3791,27 @@ function NotifRow({
 
 export function NotificationsScreen({ onNavigate, isGuest, profile }: { onNavigate: (s: Screen) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
   const [activeNav, setActiveNav] = useState("notifs");
-  const [readIds,   setReadIds]   = useState<string[]>([]);
+  // Local per-row read overlay. Seeded from the shared demo store so demo
+  // rows marked read earlier this session still show read on re-entry; real
+  // rows carry their own Supabase-derived unread state.
+  const [readIds,   setReadIds]   = useState<string[]>(() => Array.from(demoReadIds));
 
   // Real notifications for the signed-in student (notifications_select_own
-  // RLS). Replaces the former hardcoded NOTIFS array. null-safe empty on
-  // guest sessions, matching every other student real-data fetch here.
-  const [notifs,    setNotifs]    = useState<NotifItem[]>([]);
+  // RLS). Merged with the retained demo seed for display — real rows keep
+  // their authoritative Supabase read/unread state; demo rows stay local.
+  // null-safe empty on guest sessions, matching every other student
+  // real-data fetch here.
+  const [realNotifs, setRealNotifs] = useState<NotifItem[]>([]);
   const [loading,   setLoading]   = useState(!isGuest);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Demo rows are built once per mount so their relative time labels are
+  // fresh for the session. They never depend on the profile / a fetch.
+  const demoNotifs = useMemo(() => buildDemoNotifs(), []);
+
   useEffect(() => {
-    // Guests have no auth session / real profile row — nothing to fetch.
+    // Guests have no auth session / real profile row — nothing to fetch, but
+    // the demo feed still renders.
     if (isGuest || !profile?.id) { setLoading(false); return; }
     let cancelled = false;
     (async () => {
@@ -3703,10 +3821,13 @@ export function NotificationsScreen({ onNavigate, isGuest, profile }: { onNaviga
       setLoading(false);
       if (result.status === "error") { setLoadError(result.message); return; }
       setLoadError(null);
-      setNotifs(result.notifications.map(toNotifItem));
+      setRealNotifs(result.notifications.map(toNotifItem));
     })();
     return () => { cancelled = true; };
   }, [isGuest, profile?.id]);
+
+  // One chronological list (newest first) of real + demo rows.
+  const notifs = mergeNotifs(realNotifs, demoNotifs);
 
   function handleNav(id: string) {
     if (id === "profile")   { onNavigate("profile");   return; }
@@ -3719,18 +3840,26 @@ export function NotificationsScreen({ onNavigate, isGuest, profile }: { onNaviga
     setActiveNav(id);
   }
 
-  // Optimistically flip a single row read locally, then persist. On failure
-  // the local flip is left in place (best-effort, consistent with the rest
-  // of the app's read-state handling) — a reload reflects the true state.
+  // Optimistically flip a single row read locally, then persist. Demo rows
+  // are local-only (isDemo): their read state goes to the shared demo store
+  // (which drives the badge across screens), never to Supabase. Real rows
+  // persist via markNotificationRead. On failure the local flip is left in
+  // place (best-effort, matching the rest of the app) — a reload reflects
+  // the true state.
   function handleReadOne(id: string) {
     setReadIds(prev => prev.includes(id) ? prev : [...prev, id]);
+    const item = notifs.find(n => n.id === id);
+    if (item && item.isDemo) { markDemoRead([id]); return; }
     void markNotificationRead(id);
   }
 
   function handleMarkAllRead() {
-    if (!profile?.id) return;
+    // Flip every visible row (demo + real) read locally. Demo ids go to the
+    // shared store so the badge drops to include them; real ones persist
+    // server-side. Guests have no session, so skip the Supabase write.
     setReadIds(notifs.map(n => n.id));
-    void markAllNotificationsRead(profile.id);
+    markDemoRead(notifs.filter(n => n.isDemo).map(n => n.id));
+    if (profile?.id) void markAllNotificationsRead(profile.id);
   }
 
   const unreadCount = notifs.filter(n => n.unread && !readIds.includes(n.id)).length;

@@ -1,0 +1,96 @@
+- generic [ref=e2]:
+  - button "390px" [ref=e3] [cursor=pointer]
+  - generic [ref=e261]:
+    - complementary [ref=e262]:
+      - button "Expand sidebar" [ref=e264]
+      - navigation [ref=e266]:
+        - generic [ref=e267]:
+          - button "Dashboard" [ref=e268]
+          - generic: Dashboard
+        - generic [ref=e273]:
+          - button "Approvals" [ref=e274]
+          - generic: Approvals
+        - generic [ref=e279]:
+          - button "Users" [ref=e280]
+          - generic: Users
+        - generic [ref=e287]:
+          - button "Role Requests" [ref=e288]
+          - generic: Role Requests
+        - generic [ref=e302]:
+          - button "Certificate Templates" [ref=e303]
+          - generic: Certificate Templates
+        - generic [ref=e308]:
+          - button "Analytics" [ref=e309]
+          - generic: Analytics
+        - generic [ref=e313]:
+          - button "Settings" [ref=e314]
+          - generic: Settings
+        - generic [ref=e319]:
+          - button "Notifications" [ref=e320]
+          - generic: Notifications
+      - generic [ref=e326]: DH
+    - generic [ref=e329]:
+      - banner [ref=e330]:
+        - generic [ref=e331]:
+          - generic [ref=e333]:
+            - paragraph [ref=e334]: Good morning, Dr..
+            - paragraph [ref=e335]: Platform Administrator · Fieldbook
+          - generic [ref=e336]: Viewing as Guest
+          - button "Notifications" [ref=e341]
+          - button "Profile menu" [ref=e347]:
+            - generic [ref=e348]: DH
+      - main [ref=e349]:
+        - generic [ref=e350]:
+          - generic [ref=e352]:
+            - generic [ref=e353]:
+              - generic [ref=e354]: All caught up
+              - heading "Platform running smoothly." [level=2] [ref=e358]
+            - generic:
+              - img:
+                - generic: · FIELDBOOK · VERIFIED ·
+          - generic [ref=e359]:
+            - generic [ref=e360]:
+              - generic [ref=e361]: Registered Users
+              - generic [ref=e362]: "0"
+              - generic [ref=e364]: +38 this week
+            - generic [ref=e365]:
+              - generic [ref=e366]: Active Organizers
+              - generic [ref=e367]: "0"
+              - generic [ref=e369]: across 14 depts
+            - generic [ref=e370]:
+              - generic [ref=e371]: Events This Month
+              - generic [ref=e372]: "0"
+              - generic [ref=e374]: 12 live or upcoming
+            - generic [ref=e375]:
+              - generic [ref=e376]: Certs Issued (MTD)
+              - generic [ref=e377]: "0"
+              - generic [ref=e379]: via 17 events
+            - generic [ref=e380]:
+              - generic [ref=e381]: Pending Approvals
+              - generic [ref=e382]: "0"
+              - generic [ref=e384]: need your review
+          - generic [ref=e385]:
+            - generic [ref=e386]:
+              - generic [ref=e387]:
+                - generic [ref=e388]: Platform Activity
+                - button "View all →" [ref=e389]
+              - generic [ref=e390]: No activity yet.
+            - generic [ref=e393]:
+              - generic [ref=e394]: Quick Actions
+              - button "Review Approvals All caught up" [ref=e395]:
+                - generic [ref=e400]:
+                  - generic [ref=e401]: Review Approvals
+                  - generic [ref=e402]: All caught up
+              - button "User Management 4,218 accounts" [ref=e405]:
+                - generic [ref=e412]:
+                  - generic [ref=e413]: User Management
+                  - generic [ref=e414]: 4,218 accounts
+              - button "Certificate Templates 6 active templates" [ref=e417]:
+                - generic [ref=e422]:
+                  - generic [ref=e423]: Certificate Templates
+                  - generic [ref=e424]: 6 active templates
+              - button "Platform Analytics Usage this month" [ref=e427]:
+                - generic [ref=e431]:
+                  - generic [ref=e432]: Platform Analytics
+                  - generic [ref=e433]: Usage this month
+  - region "Notifications alt+T"

@@ -35,6 +35,8 @@ import {
   capitalizeStatus,
 } from "../lib/events";
 import { submitEventApproval } from "../lib/approvals";
+import { listEventAttendees, type EventAttendee } from "../lib/attendance";
+import { getActiveRegistrationCounts } from "../lib/registrations";
 import { Link } from "react-router";
 import {
   Sheet, SheetTrigger, SheetContent, SheetClose, SheetTitle,
@@ -275,6 +277,25 @@ const ORG_EVENTS: OrgEvent[] = [
   { id: "oe5", title: "Leadership Summit 2024",             date: "Oct 22, 2024", venue: "Campus Center",      status: "Completed", attendees: 112, capacity: 120 },
 ];
 
+// Maps a real events-table row (EventRow) into the OrgEvent display shape the
+// dashboard's My Events / Live Now sections render. `attendees` carries the
+// real active-registration count for the event when known (from
+// getActiveRegistrationCounts), else 0 — never a fabricated figure. `capacity`
+// is the event's own capacity column (0 = uncapped; callers must guard against
+// divide-by-zero). Venue collapses to "Online" for online events.
+function eventRowToOrgEvent(ev: EventRow, registeredCount: number): OrgEvent {
+  return {
+    id: ev.id,
+    title: ev.title,
+    date: formatEventDate(ev.event_date),
+    venue: ev.location_type === "online" ? "Online" : (ev.venue ?? "Venue TBD"),
+    status: capitalizeStatus(ev.status),
+    attendees: registeredCount,
+    capacity: ev.capacity ?? 0,
+    startTime: formatEventTime(ev.start_time),
+  };
+}
+
 type OrgActivityItem = {
   id: string;
   icon: React.ComponentType<{ size?: number; strokeWidth?: number; color?: string }>;
@@ -367,6 +388,35 @@ function AttendeePill({ value }: { value: string }) {
   );
 }
 
+// Formats an ISO check-in timestamp as a short local time, e.g. "10:02 AM".
+// Falls back to null (rendered as "—") when absent/unparseable.
+function formatCheckinTime(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+// Maps a real EventAttendee (from the event_attendees RPC) into the
+// Attendee shape this screen already renders. Status/cert-status derive
+// from the engagement booleans; `dept` and a per-student short id have no
+// backing column in `profiles`, so they stay "—" (no extra PII exposed).
+function toAttendee(a: EventAttendee): Attendee {
+  const status: AttendeeStatus =
+    a.checkedIn ? "Checked In" : a.registered ? "Pending" : "No-show";
+  const certStatus: AttendeeCertStatus =
+    a.certificateIssued ? "Issued" : a.checkedIn ? "Pending" : "Not eligible";
+  return {
+    id: a.studentId,
+    name: a.fullName,
+    studentId: "—",
+    dept: "—",
+    checkinTime: formatCheckinTime(a.checkedInAt),
+    status,
+    certStatus,
+  };
+}
+
 function OrgStatusBadge({ status }: { status: OrgEventStatus }) {
   const cfg: Record<OrgEventStatus, { bg: string; fg: string; dot?: string }> = {
     Live:      { bg: "#2D6A4F",               fg: "#FCFAF3", dot: "#7ECB9A" },
@@ -400,7 +450,68 @@ export function OrganizerDashboard({ onNavigate, isGuest, profile }: { onNavigat
     setActiveNav(id);
   }
 
-  const liveEvent = ORG_EVENTS.find(e => e.status === "Live");
+  // ── Real organizer events (My Events + Live Now) ──
+  // For an authenticated organizer, load their real events and derive the
+  // dashboard lists from them. Guests, an organizer with no events, or a load
+  // error all keep the existing ORG_EVENTS demo content — a real result never
+  // replaces useful demo content with an empty list.
+  const [realEvents, setRealEvents] = useState<OrgEvent[] | null>(null);
+  // Real check-in / registered counts for the resolved live event only. null
+  // until loaded (or if unavailable) so the Live Now card can fall back to the
+  // demo event's own numbers rather than showing fabricated/zero counts.
+  const [liveCounts, setLiveCounts] = useState<{ checkedIn: number; registered: number } | null>(null);
+
+  useEffect(() => {
+    if (isGuest || !profile?.id) return;
+    let cancelled = false;
+    (async () => {
+      const evResult = await listOrganizerEvents(profile.id);
+      if (cancelled || evResult.status !== "success" || evResult.events.length === 0) return;
+
+      // Real active-registration counts for all events (aggregate integers
+      // only, via the existing SECURITY DEFINER RPC). Missing id = 0.
+      const countsResult = await getActiveRegistrationCounts(evResult.events.map(e => e.id));
+      const counts = countsResult.status === "success" ? countsResult.counts : new Map<string, number>();
+      if (cancelled) return;
+
+      const mapped = evResult.events.map(ev => eventRowToOrgEvent(ev, counts.get(ev.id) ?? 0));
+      setRealEvents(mapped);
+
+      // Best-effort real counts for the live event's progress bar. The
+      // attendees RPC may not be deployed yet — on any error we simply leave
+      // liveCounts null and the card falls back to the demo numbers.
+      const live = evResult.events.find(e => e.status === "live");
+      if (live) {
+        const attResult = await listEventAttendees(live.id);
+        if (cancelled) return;
+        if (attResult.status === "success") {
+          setLiveCounts({
+            checkedIn: attResult.attendees.filter(a => a.checkedIn).length,
+            registered: counts.get(live.id) ?? 0,
+          });
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isGuest, profile?.id]);
+
+  // Use real events only when actually present; otherwise the demo array.
+  const hasRealEvents = !!realEvents && realEvents.length > 0;
+  const eventsForList = hasRealEvents ? realEvents! : ORG_EVENTS;
+
+  // Resolved live event (real if available, else demo). For a real live event,
+  // override its counts with the real check-in/registered figures when known.
+  const liveEventBase = eventsForList.find(e => e.status === "Live");
+  const liveEvent = liveEventBase
+    ? (hasRealEvents && liveCounts
+        ? { ...liveEventBase, attendees: liveCounts.checkedIn, capacity: liveCounts.registered }
+        : liveEventBase)
+    : undefined;
+  // Attendance % only when we have a positive denominator — never divide by 0.
+  const liveCapacityPct = liveEvent && liveEvent.capacity > 0
+    ? Math.round((liveEvent.attendees / liveEvent.capacity) * 100)
+    : null;
+
   const h = new Date().getHours();
   const greeting = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 
@@ -470,12 +581,15 @@ export function OrganizerDashboard({ onNavigate, isGuest, profile }: { onNavigat
                         {liveEvent.attendees} checked in · {liveEvent.capacity} registered
                       </span>
                     </div>
-                    {/* Attendance bar */}
+                    {/* Attendance bar — only when a positive registered
+                        denominator exists (uncapped/0 events show no bar
+                        rather than a divide-by-zero or fabricated 0%). */}
+                    {liveCapacityPct !== null && (
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-[9px] tracking-widest uppercase" style={{ ...M, color: "#9C8E7E" }}>Attendance progress</span>
                         <span className="text-[9px]" style={{ ...M, color: "#2D6A4F" }}>
-                          {Math.round((liveEvent.attendees / liveEvent.capacity) * 100)}% capacity
+                          {liveCapacityPct}% capacity
                         </span>
                       </div>
                       <div className="h-[5px] rounded-full overflow-hidden" style={{ background: "#DCD4C2" }}>
@@ -483,11 +597,12 @@ export function OrganizerDashboard({ onNavigate, isGuest, profile }: { onNavigat
                           className="h-full rounded-full"
                           style={{ background: "#2D6A4F" }}
                           initial={{ width: 0 }}
-                          animate={{ width: `${(liveEvent.attendees / liveEvent.capacity) * 100}%` }}
+                          animate={{ width: `${liveCapacityPct}%` }}
                           transition={{ duration: 0.9, ease: "easeOut", delay: 0.35 }}
                         />
                       </div>
                     </div>
+                    )}
                   </>
                 ) : (
                   <p className="text-[#6B6355]" style={{ fontFamily: "'Public Sans', system-ui, sans-serif" }}>
@@ -550,11 +665,11 @@ export function OrganizerDashboard({ onNavigate, isGuest, profile }: { onNavigat
                   View all <ChevronRight size={11} strokeWidth={1.5} />
                 </button>
               </div>
-              {ORG_EVENTS.map((ev, i) => (
+              {eventsForList.map((ev, i) => (
                 <div
                   key={ev.id}
                   className={`flex items-center gap-4 px-6 py-[13px] transition-colors cursor-pointer hover:bg-[#F6F1E7] ${
-                    i < ORG_EVENTS.length - 1 ? "border-b border-[#DCD4C2]" : ""
+                    i < eventsForList.length - 1 ? "border-b border-[#DCD4C2]" : ""
                   }`}
                 >
                   <div className="flex-1 min-w-0">
@@ -3728,9 +3843,62 @@ export function OrgAttendeesScreen({
   isGuest?: boolean;
   profile?: AuthedProfile | null;
 }) {
-  const event     = ORG_EVENTS.find(e => e.id === eventId) ?? ORG_EVENTS[3];
-  const attendees = ATTENDEES_BY_EVENT[eventId] ?? ATTENDEES_BY_EVENT["oe4"];
+  // ── Real data (organizer's own events + attendee roster) ──
+  // Load the organizer's real events, resolve the target event (URL param if
+  // it matches a real event, otherwise the first real event), then fetch its
+  // attendee roster via the event_attendees RPC (organizer-scoped server-side).
+  const [realEvents, setRealEvents]       = useState<EventRow[]>([]);
+  const [realAttendees, setRealAttendees] = useState<Attendee[] | null>(null);
 
+  useEffect(() => {
+    if (isGuest || !profile?.id) return;
+    let cancelled = false;
+    (async () => {
+      const evResult = await listOrganizerEvents(profile.id);
+      if (cancelled || evResult.status !== "success") return;
+      setRealEvents(evResult.events);
+
+      // Prefer the URL-provided event id when it belongs to this organizer;
+      // otherwise fall back to their first real event. (The route's legacy
+      // "oe4" default is a mock id that won't match, so it resolves here.)
+      const target =
+        evResult.events.find(e => e.id === eventId) ?? evResult.events[0] ?? null;
+      if (!target) return;
+
+      const attResult = await listEventAttendees(target.id);
+      if (cancelled || attResult.status !== "success") return;
+      setRealAttendees(attResult.attendees.map(toAttendee));
+    })();
+    return () => { cancelled = true; };
+  }, [isGuest, profile?.id, eventId]);
+
+  // Resolved real event for this screen (URL match, else first owned event).
+  const realEvent =
+    realEvents.find(e => e.id === eventId) ?? realEvents[0] ?? null;
+
+  // Fallback policy: use real data only when it is actually present. A guest
+  // session, an organizer with no events, or an empty roster all fall back to
+  // the existing demo content rather than showing an empty table — never
+  // replace useful demo content with an empty real result.
+  const hasRealAttendees = !!realAttendees && realAttendees.length > 0;
+
+  // Header/footer follow the same real-vs-demo decision as the roster body,
+  // so the event title and the rows below it never disagree (a real event
+  // title is only shown when its real roster is what's being displayed).
+  const event = (realEvent && hasRealAttendees)
+    ? {
+        title: realEvent.title,
+        // Footer's "of N registered" shows the displayed roster size for real
+        // events (there is no precomputed attendee count on EventRow).
+        attendees: realAttendees!.length,
+      }
+    : (ORG_EVENTS.find(e => e.id === eventId) ?? ORG_EVENTS[3]);
+
+  const attendees = hasRealAttendees
+    ? realAttendees!
+    : (ATTENDEES_BY_EVENT[eventId] ?? ATTENDEES_BY_EVENT["oe4"]);
+
+  // Stats always recompute from the displayed rows (real or demo).
   const totalReg    = attendees.length;
   const checkedIn   = attendees.filter(a => a.status === "Checked In").length;
   const rate        = totalReg > 0 ? Math.round((checkedIn / totalReg) * 100) : 0;

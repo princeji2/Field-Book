@@ -1,0 +1,260 @@
+- generic [ref=f4e2]:
+  - button "390px" [ref=f4e3] [cursor=pointer]
+  - generic [ref=f4e7]:
+    - navigation [ref=f4e8]:
+      - generic [ref=f4e9]:
+        - link "Fieldbook" [ref=f4e10] [cursor=pointer]:
+          - /url: /
+        - generic [ref=f4e15]:
+          - link "Features" [ref=f4e16] [cursor=pointer]:
+            - /url: "#features"
+          - link "For Campuses" [ref=f4e17] [cursor=pointer]:
+            - /url: /campuses
+          - link "Pricing" [ref=f4e18] [cursor=pointer]:
+            - /url: /pricing
+          - button "Sign in" [ref=f4e19]
+        - button "Get Started" [ref=f4e21]
+    - main [ref=f4e22]:
+      - generic [ref=f4e23]:
+        - generic [ref=f4e24]:
+          - generic [ref=f4e25]: Campus Ledger System
+          - heading [level=1] [ref=f4e28]:
+            - text: The Official Record of Campus
+            - emphasis [ref=f4e29]: Participation.
+          - paragraph [ref=f4e30]: Track events, verify attendance, and issue certificates that students carry forward. Built for institutions that take campus life seriously.
+          - generic [ref=f4e31]:
+            - button "Get Started" [ref=f4e32]
+            - button "See how it works" [ref=f4e35]
+          - generic [ref=f4e38]:
+            - generic [ref=f4e39]:
+              - generic [ref=f4e40]: 0+
+              - generic [ref=f4e41]: Campuses
+            - generic [ref=f4e42]:
+              - generic [ref=f4e43]: 0.0M
+              - generic [ref=f4e45]: Certificates
+            - generic [ref=f4e46]:
+              - generic [ref=f4e47]: 0.0%
+              - generic [ref=f4e49]: Accuracy
+        - generic [ref=f4e51]:
+          - generic [ref=f4e52]:
+            - generic [ref=f4e53]: Event Ledger
+            - generic [ref=f4e58]: "#FB-2024-0891"
+          - generic [ref=f4e59]:
+            - generic [ref=f4e60]: Environmental Policy Symposium
+            - generic [ref=f4e61]:
+              - generic [ref=f4e62]: Nov 14, 2024
+              - generic [ref=f4e65]: Whitman Hall, Rm 204
+          - generic [ref=f4e69]:
+            - generic [ref=f4e70]: Name
+            - generic [ref=f4e71]: Time
+            - generic [ref=f4e72]: Status
+          - generic [ref=f4e73]:
+            - generic [ref=f4e76]:
+              - generic [ref=f4e77]: Sarah Chen
+              - generic [ref=f4e78]: SCH-4421
+            - generic [ref=f4e79]: 09:02
+          - generic [ref=f4e82]:
+            - generic [ref=f4e85]:
+              - generic [ref=f4e86]: Marcus Williams
+              - generic [ref=f4e87]: MWI-3387
+            - generic [ref=f4e88]: 09:04
+          - generic [ref=f4e91]:
+            - generic [ref=f4e94]:
+              - generic [ref=f4e95]: Priya Patel
+              - generic [ref=f4e96]: PPA-7702
+            - generic [ref=f4e97]: 09:07
+          - generic [ref=f4e100]:
+            - generic [ref=f4e103]:
+              - generic [ref=f4e104]: James Rodriguez
+              - generic [ref=f4e105]: JRO-9915
+            - generic [ref=f4e106]: 09:11
+          - generic [ref=f4e109]:
+            - generic [ref=f4e112]:
+              - generic [ref=f4e113]: Aisha Thompson
+              - generic [ref=f4e114]: ATH-2246
+            - generic [ref=f4e115]: —
+          - generic [ref=f4e117]:
+            - generic [ref=f4e126]:
+              - generic [ref=f4e127]: Scan to attend
+              - generic [ref=f4e128]: ENV-POL-2024
+            - generic:
+              - img:
+                - generic: · FIELDBOOK · VERIFIED ·
+      - generic [ref=f4e130]:
+        - generic [ref=f4e131]:
+          - generic [ref=f4e132]:
+            - paragraph [ref=f4e133]: The Process
+            - heading "QR scan to certificate in under a minute." [level=2] [ref=f4e134]: QR scan to certificatein under a minute.
+          - paragraph [ref=f4e135]: Select any step to see the live interface. Each transition is automatic — no manual steps for students.
+        - generic [ref=f4e136]:
+          - button "01 Create Event" [ref=f4e137]:
+            - generic [ref=f4e138]: "01"
+            - generic [ref=f4e142]: Create Event
+          - button "02 Students Scan" [ref=f4e143]:
+            - generic [ref=f4e144]: "02"
+            - generic [ref=f4e150]: Students Scan
+          - button "03 Certificate Issued" [ref=f4e151]:
+            - generic [ref=f4e152]: "03"
+            - generic [ref=f4e156]: Certificate Issued
+        - generic [ref=f4e158]:
+          - generic [ref=f4e159]:
+            - generic [ref=f4e160]: New Event
+            - generic [ref=f4e165]:
+              - generic [ref=f4e166]:
+                - generic [ref=f4e167]: TITLE
+                - generic [ref=f4e168]: Environmental Policy Symposium
+              - generic [ref=f4e169]:
+                - generic [ref=f4e170]: DATE
+                - generic [ref=f4e171]: November 14, 2024
+              - generic [ref=f4e172]:
+                - generic [ref=f4e173]: LOCATION
+                - generic [ref=f4e174]: Whitman Hall, Room 204
+              - generic [ref=f4e175]:
+                - generic [ref=f4e176]: ORGANIZER
+                - generic [ref=f4e177]: Prof. Andrei Volkov
+            - generic [ref=f4e178]:
+              - generic [ref=f4e179]: "Max Capacity: 120"
+              - generic [ref=f4e180]: ● Certificates Enabled
+          - generic [ref=f4e181]:
+            - generic [ref=f4e182]: Generated QR
+            - generic [ref=f4e320]:
+              - generic [ref=f4e321]: ENV-POL-2024
+              - generic [ref=f4e322]: Active · Time-locked
+        - paragraph [ref=f4e324]: Organizers register an event and receive a time-locked QR code bound to the venue and session window.
+      - generic [ref=f4e326]:
+        - generic [ref=f4e328]:
+          - paragraph [ref=f4e329]: Who It's For
+          - heading "Three roles, one system." [level=2] [ref=f4e330]
+        - generic [ref=f4e331]:
+          - generic [ref=f4e332]:
+            - generic [ref=f4e333]: STUDENT
+            - heading "Build your campus record." [level=3] [ref=f4e338]
+            - paragraph [ref=f4e339]: Track every event you attend. Access your full participation history and download certificates whenever you need them.
+            - list [ref=f4e340]:
+              - listitem [ref=f4e341]: Personal participation ledger
+              - listitem [ref=f4e344]: Certificate portfolio
+              - listitem [ref=f4e347]: Event discovery feed
+              - listitem [ref=f4e350]: QR scan history
+          - generic [ref=f4e353]:
+            - generic [ref=f4e354]: ORGANIZER
+            - heading "Run events with authority." [level=3] [ref=f4e359]
+            - paragraph [ref=f4e360]: Create events, generate QR codes, and monitor attendance in real time. Every scan recorded with a timestamp.
+            - list [ref=f4e361]:
+              - listitem [ref=f4e362]: Event creation & QR generation
+              - listitem [ref=f4e365]: Real-time attendance board
+              - listitem [ref=f4e368]: Certificate batch issuance
+              - listitem [ref=f4e371]: Exportable records
+          - generic [ref=f4e374]:
+            - generic [ref=f4e375]: ADMIN
+            - heading "Govern participation." [level=3] [ref=f4e380]
+            - paragraph [ref=f4e381]: Oversight across all events and organizers. Set policies, review certificates, and generate institutional reports.
+            - list [ref=f4e382]:
+              - listitem [ref=f4e383]: Institution-wide dashboard
+              - listitem [ref=f4e386]: Organizer management
+              - listitem [ref=f4e389]: Policy configuration
+              - listitem [ref=f4e392]: Audit logs & compliance
+      - generic [ref=f4e396]:
+        - generic [ref=f4e398]:
+          - paragraph [ref=f4e399]: Platform
+          - heading "Everything the ledger needs." [level=2] [ref=f4e400]: Everything theledger needs.
+        - generic [ref=f4e401]:
+          - generic [ref=f4e402]:
+            - generic [ref=f4e403]: CORE
+            - heading "QR Attendance" [level=3] [ref=f4e412]
+            - paragraph [ref=f4e413]: Unique per-event QR codes. Scans timestamped and logged instantly. Anti-spoofing and time-window enforcement built in to every session.
+          - generic [ref=f4e414]:
+            - generic [ref=f4e415]: CORE
+            - heading "Digital Certificates" [level=3] [ref=f4e421]
+            - paragraph [ref=f4e422]: Verifiable credentials generated at event close. Carry your institution's seal, cryptographic signature, and a permanent public verification link.
+          - generic [ref=f4e423]:
+            - generic [ref=f4e424]: INSIGHT
+            - heading "Analytics" [level=3] [ref=f4e429]
+            - paragraph [ref=f4e430]: Engagement reports, participation trends, and cohort analysis. Identify your most active departments and the events that drive engagement.
+          - generic [ref=f4e431]:
+            - generic [ref=f4e432]: ENGAGEMENT
+            - heading "Discovery" [level=3] [ref=f4e438]
+            - paragraph [ref=f4e439]: Students browse a curated feed of upcoming events. Follow departments, receive invitations, and plan the semester ahead.
+      - generic [ref=f4e442]:
+        - generic [ref=f4e443]:
+          - generic [ref=f4e444]: 0+
+          - generic [ref=f4e446]: Partner Campuses
+        - generic [ref=f4e447]:
+          - generic [ref=f4e448]: 0M
+          - generic [ref=f4e450]: Certificates Issued
+        - generic [ref=f4e451]:
+          - generic [ref=f4e452]: 0%
+          - generic [ref=f4e454]: Verification Accuracy
+        - generic [ref=f4e455]:
+          - generic [ref=f4e456]: "0"
+          - generic [ref=f4e457]: Countries
+      - generic [ref=f4e459]:
+        - img [ref=f4e462]:
+          - generic [ref=f4e467]: · FIELDBOOK · VERIFIED ·
+        - heading [level=2] [ref=f4e469]:
+          - text: Ready to formalize
+          - emphasis [ref=f4e470]: campus participation?
+        - paragraph [ref=f4e471]: Join 127 institutions building a verifiable record of student engagement. Setup takes under a day.
+        - generic [ref=f4e472]:
+          - button "Get Started — it's free" [ref=f4e473]
+          - button "Request a Demo" [ref=f4e476]
+    - contentinfo [ref=f4e477]:
+      - generic [ref=f4e478]:
+        - generic [ref=f4e479]:
+          - generic [ref=f4e480]:
+            - generic [ref=f4e481]: Fieldbook
+            - paragraph [ref=f4e486]: The official campus participation ledger for institutions that take student engagement seriously.
+          - generic [ref=f4e487]:
+            - heading "Product" [level=4] [ref=f4e488]
+            - list [ref=f4e489]:
+              - listitem [ref=f4e490]:
+                - link "Features" [ref=f4e491] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=f4e492]:
+                - link "Certificates" [ref=f4e493] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=f4e494]:
+                - link "Analytics" [ref=f4e495] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=f4e496]:
+                - link "Discovery" [ref=f4e497] [cursor=pointer]:
+                  - /url: "#"
+          - generic [ref=f4e498]:
+            - heading "Institutions" [level=4] [ref=f4e499]
+            - list [ref=f4e500]:
+              - listitem [ref=f4e501]:
+                - link "Student Portal" [ref=f4e502] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=f4e503]:
+                - link "Organizer Tools" [ref=f4e504] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=f4e505]:
+                - link "Admin Dashboard" [ref=f4e506] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=f4e507]:
+                - link "Integrations" [ref=f4e508] [cursor=pointer]:
+                  - /url: "#"
+          - generic [ref=f4e509]:
+            - heading "Company" [level=4] [ref=f4e510]
+            - list [ref=f4e511]:
+              - listitem [ref=f4e512]:
+                - link "About" [ref=f4e513] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=f4e514]:
+                - link "Blog" [ref=f4e515] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=f4e516]:
+                - link "Careers" [ref=f4e517] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=f4e518]:
+                - link "Contact" [ref=f4e519] [cursor=pointer]:
+                  - /url: "#"
+        - generic [ref=f4e520]:
+          - paragraph [ref=f4e521]: © 2024 Fieldbook Systems, Inc. All rights reserved.
+          - generic [ref=f4e522]:
+            - link "Privacy" [ref=f4e523] [cursor=pointer]:
+              - /url: "#"
+            - link "Terms" [ref=f4e524] [cursor=pointer]:
+              - /url: "#"
+            - link "Security" [ref=f4e525] [cursor=pointer]:
+              - /url: "#"
+  - region "Notifications alt+T"

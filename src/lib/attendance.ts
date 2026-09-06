@@ -174,3 +174,74 @@ export async function listMyAttendance(
 
   return { status: "success", events };
 }
+
+// ─── Organizer attendee roster ──────────────────────────────────────────────
+
+/**
+ * A single attendee of one organizer-owned event, as returned by the
+ * `event_attendees(p_event_id)` RPC (20260822120000_event_attendees_rpc.sql).
+ *
+ * The RPC unions active registrations, attendance records, and issued
+ * certificates for the event and resolves each student's name server-side
+ * (organizers have no direct `profiles` read path). It exposes ONLY the
+ * fields below — no email/phone/bio — and returns zero rows unless the
+ * caller owns the event.
+ */
+export interface EventAttendee {
+  /** The student's profiles.id. */
+  studentId: string;
+  /** Student display name (profiles.full_name). */
+  fullName: string;
+  /** Has an active ('registered') registration for the event. */
+  registered: boolean;
+  /** Has an attendance (check-in) record for the event. */
+  checkedIn: boolean;
+  /** ISO timestamp of the check-in, or null if not checked in. */
+  checkedInAt: string | null;
+  /** At least one certificate has been issued to the student for this event. */
+  certificateIssued: boolean;
+}
+
+// Row shape as it comes back from the RPC (snake_case columns).
+interface EventAttendeeRpcRow {
+  student_id: string;
+  full_name: string | null;
+  registered: boolean | null;
+  checked_in: boolean | null;
+  checked_in_at: string | null;
+  certificate_issued: boolean | null;
+}
+
+export type ListEventAttendeesResult =
+  | { status: "success"; attendees: EventAttendee[] }
+  | { status: "error"; message: string };
+
+/**
+ * Lists the attendee roster for a single event the signed-in organizer
+ * owns, via the `event_attendees` RPC. Ordering (from the RPC): checked-in
+ * students first by check-in time, then the rest by name.
+ *
+ * Authorization is enforced entirely server-side inside the SECURITY
+ * DEFINER function (events.organizer_id = auth.uid()); a non-owner — or a
+ * guest — simply gets an empty list, never another organizer's roster.
+ */
+export async function listEventAttendees(
+  eventId: string,
+): Promise<ListEventAttendeesResult> {
+  const { data, error } = await supabase.rpc("event_attendees", {
+    p_event_id: eventId,
+  });
+
+  if (error) return { status: "error", message: error.message };
+
+  const attendees: EventAttendee[] = ((data ?? []) as EventAttendeeRpcRow[]).map((row) => ({
+    studentId: row.student_id,
+    fullName: row.full_name ?? "Fieldbook Student",
+    registered: row.registered ?? false,
+    checkedIn: row.checked_in ?? false,
+    checkedInAt: row.checked_in_at ?? null,
+    certificateIssued: row.certificate_issued ?? false,
+  }));
+
+  return { status: "success", attendees };
+}

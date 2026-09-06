@@ -1,0 +1,25 @@
+- generic [ref=e2]:
+  - button "390px" [ref=e3] [cursor=pointer]
+  - generic [ref=e115]:
+    - generic [ref=e120]:
+      - generic [ref=e121]: Fieldbook
+      - generic [ref=e122]: Admin
+    - generic [ref=e123]:
+      - paragraph [ref=e124]: Signing in as
+      - paragraph [ref=e125]: Dr. Helena Marsh
+    - generic [ref=e127]:
+      - paragraph [ref=e128]: Select a role to continue
+      - generic [ref=e129]:
+        - button [disabled] [ref=e131]:
+          - generic [ref=e132]: Admin
+          - paragraph [ref=e134]: Admin
+          - paragraph [ref=e135]: Full platform access
+        - button [disabled] [active] [ref=e137]:
+          - generic [ref=e138]: Organizer
+          - paragraph [ref=e140]: Organizer
+          - paragraph [ref=e141]: Manage your events
+        - button [disabled] [ref=e143]:
+          - generic [ref=e144]: Student
+          - paragraph [ref=e146]: Student
+          - paragraph [ref=e147]: View and register
+  - region "Notifications alt+T"

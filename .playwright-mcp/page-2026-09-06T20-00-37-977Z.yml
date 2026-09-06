@@ -1,0 +1,29 @@
+- generic [ref=f2e2]:
+  - button "390px" [ref=f2e3] [cursor=pointer]
+  - generic [ref=f2e8]:
+    - generic [ref=f2e13]:
+      - generic [ref=f2e14]: Fieldbook
+      - generic [ref=f2e15]: Admin
+    - generic [ref=f2e17]:
+      - generic [ref=f2e18]:
+        - paragraph [ref=f2e19]: Admin Portal
+        - heading "Sign in to Fieldbook." [level=1] [ref=f2e20]
+      - generic [ref=f2e81]:
+        - generic [ref=f2e82]: Email Address
+        - textbox "Email Address" [ref=f2e83]:
+          - /placeholder: admin@university.edu
+      - generic [ref=f2e84]:
+        - generic [ref=f2e85]: Password
+        - generic [ref=f2e86]:
+          - textbox "Password" [ref=f2e87]:
+            - /placeholder: ••••••••
+          - button [ref=f2e88]
+      - button "Sign In" [ref=f2e92]
+      - generic [ref=f2e93]: or
+      - button "Continue with Google" [ref=f2e97]
+      - button "Continue as Guest (View Only)" [ref=f2e103]
+      - generic [ref=f2e107]:
+        - button "Forgot password?" [ref=f2e108]
+        - button "Don't have an account? Create one" [ref=f2e109]
+    - button "Change role" [ref=f2e111]
+  - region "Notifications alt+T"
