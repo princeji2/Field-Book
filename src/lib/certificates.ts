@@ -17,6 +17,21 @@ const REQUEST_TIMEOUT_MS = 60_000;
 /** Number of automatic retries on network failure (cold-start resilience). */
 const MAX_RETRIES = 1;
 
+/** Marks a response-level failure we want the retry loop to treat like a
+ *  network throw (transient Supabase clock-skew 502 — see PGRST303). */
+class RetryableUpstreamError extends Error {}
+
+/** True for the transient 502 "Supabase integration failure" shape
+ *  (e.g. PGRST303 "JWT issued at future"), which usually succeeds on retry. */
+function isRetryableSupabase502(status: number, body: unknown): boolean {
+  if (status !== 502) return false;
+  if (!body || typeof body !== "object") return false;
+  const err = (body as { error?: unknown }).error;
+  const msg = (body as { message?: unknown }).message;
+  const text = `${typeof err === "string" ? err : ""} ${typeof msg === "string" ? msg : ""}`;
+  return /Supabase integration failure/i.test(text) || /PGRST303/i.test(text);
+}
+
 export interface GenerateCertificateParams {
   studentName: string;
   eventTitle: string;
@@ -112,7 +127,7 @@ export async function generateCertificate(
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await fetchWithTimeout(url, fetchOptions, REQUEST_TIMEOUT_MS);
-      return await handleResponse(response);
+      return await handleResponse(response, attempt < MAX_RETRIES);
     } catch (err) {
       lastError = err;
 
@@ -186,7 +201,7 @@ export async function generateCertificateWithRetry(
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await fetchWithTimeout(url, fetchOptions, REQUEST_TIMEOUT_MS);
-      return await handleResponse(response);
+      return await handleResponse(response, attempt < MAX_RETRIES);
     } catch (err) {
       lastError = err;
 
@@ -216,7 +231,10 @@ export async function generateCertificateWithRetry(
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-async function handleResponse(response: Response): Promise<GenerateCertificateResult> {
+async function handleResponse(
+  response: Response,
+  canRetry: boolean,
+): Promise<GenerateCertificateResult> {
   let body: unknown;
   try {
     body = await response.json();
@@ -225,6 +243,9 @@ async function handleResponse(response: Response): Promise<GenerateCertificateRe
   }
 
   if (!response.ok) {
+    if (canRetry && isRetryableSupabase502(response.status, body)) {
+      throw new RetryableUpstreamError();
+    }
     const message =
       (body && typeof body === "object" && "message" in body && typeof (body as { message?: unknown }).message === "string"
         ? (body as { message: string }).message
