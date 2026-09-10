@@ -98,6 +98,13 @@ export interface AttendedEvent {
   /** ISO timestamp the attendance was recorded (attendance.recorded_at). */
   recordedAt: string;
   attended: true;
+  /**
+   * The certificate template assigned to this event
+   * (events.certificate_template_id), or undefined if the event issues no
+   * certificate. Passed as `templateId` to certificate-service when the
+   * student generates their certificate.
+   */
+  certTemplateId?: string;
 }
 
 export type ListMyAttendanceResult =
@@ -117,6 +124,7 @@ interface AttendanceEmbeddedEvent {
   start_time: string | null;
   end_time: string | null;
   location_type: string | null;
+  certificate_template_id: string | null;
 }
 
 interface AttendanceJoinRow {
@@ -150,7 +158,7 @@ export async function listMyAttendance(
   const { data, error } = await supabase
     .from("attendance")
     .select(
-      "event_id, recorded_at, events(title, category, venue, code, event_date, start_time, end_time, location_type)",
+      "event_id, recorded_at, events(title, category, venue, code, event_date, start_time, end_time, location_type, certificate_template_id)",
     )
     .eq("student_id", studentId)
     .order("recorded_at", { ascending: false });
@@ -169,6 +177,7 @@ export async function listMyAttendance(
       code: ev?.code ?? "",
       recordedAt: row.recorded_at,
       attended: true,
+      certTemplateId: ev?.certificate_template_id ?? undefined,
     };
   });
 
