@@ -25,11 +25,12 @@ export interface EventRow {
   capacity: number;
   status: EventStatus;
   qr_photo_url: string | null;
+  certificate_template_id: string | null;
   created_at?: string;
 }
 
 const EVENT_COLUMNS =
-  "id, title, code, organizer_id, department, category, description, location_type, venue, event_date, start_time, end_time, capacity, status, qr_photo_url, created_at";
+  "id, title, code, organizer_id, department, category, description, location_type, venue, event_date, start_time, end_time, capacity, status, qr_photo_url, certificate_template_id, created_at";
 
 export type ListEventsResult =
   | { status: "success"; events: EventRow[] }
