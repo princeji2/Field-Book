@@ -15,3 +15,10 @@ supabase/.temp
 .next/
 node_modules/
 .env.local
+.playwright-mcp/
+graphify-out/
+tc_inventory.log
+
+.playwright-mcp/
+graphify-out/
+tc_inventory.log
