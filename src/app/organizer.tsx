@@ -37,6 +37,7 @@ import {
 import { submitEventApproval } from "../lib/approvals";
 import { listEventAttendees, type EventAttendee } from "../lib/attendance";
 import { getActiveRegistrationCounts } from "../lib/registrations";
+import { listCertificateTemplates, type CertificateTemplateOption } from "../lib/certificateTemplates";
 import { Link } from "react-router";
 import {
   Sheet, SheetTrigger, SheetContent, SheetClose, SheetTitle,
@@ -754,6 +755,7 @@ type EventFormData = {
   requireRegistration: boolean;
   enableWaitlist: boolean;
   requireCheckIn: boolean;
+  certificateTemplateId: string;
 };
 
 const DEFAULT_FORM: EventFormData = {
@@ -770,6 +772,7 @@ const DEFAULT_FORM: EventFormData = {
   requireRegistration: true,
   enableWaitlist: false,
   requireCheckIn: true,
+  certificateTemplateId: "",
 };
 
 const CATEGORY_BANNER: Record<string, string> = {
@@ -934,6 +937,10 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
   const [eventsLoading, setEventsLoading] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
 
+  // Certificate templates for the event form's picker (admin-curated set;
+  // organizers select but never create — see lib/certificateTemplates.ts).
+  const [certTemplates, setCertTemplates] = useState<CertificateTemplateOption[]>([]);
+
   async function refreshEvents() {
     if (!profile?.id) { setEventsLoading(false); return; }
     setEventsLoading(true);
@@ -948,6 +955,18 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
   }
 
   useEffect(() => { void refreshEvents(); }, [profile?.id]);
+
+  // Load the certificate templates once for the form's picker. Silent on
+  // failure — the dropdown just shows only the "No certificate" option.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const result = await listCertificateTemplates();
+      if (cancelled) return;
+      if (result.status === "success") setCertTemplates(result.templates);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   function upd<K extends keyof EventFormData>(k: K, v: EventFormData[K]) {
     setForm(prev => ({ ...prev, [k]: v }));
@@ -972,6 +991,7 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
       locationType: ev.location_type,
       venue: ev.venue ?? "",
       capacity: String(ev.capacity),
+      certificateTemplateId: ev.certificate_template_id ?? "",
     });
     setEditEvent(ev);
     setView("edit");
@@ -995,6 +1015,7 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
       start_time: form.startTime || null,
       end_time: form.endTime || null,
       capacity: parseInt(form.capacity, 10) || 0,
+      certificate_template_id: form.certificateTemplateId || null,
     };
   }
 
@@ -1532,6 +1553,30 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
                           <OrgToggle on={form.enableWaitlist} onChange={v => upd("enableWaitlist", v)} label="Enable waitlist when full" />
                         )}
                         <OrgToggle on={form.requireCheckIn} onChange={v => upd("requireCheckIn", v)} label="Require QR check-in for attendance" />
+                      </div>
+                    </FormCard>
+                  </motion.div>
+
+                  {/* Certificate */}
+                  <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: "easeOut", delay: 0.18 }}>
+                    <FormCard title="Certificate">
+                      <div>
+                        <FieldLabel>Certificate Template</FieldLabel>
+                        <select
+                          className={inputCls + " appearance-none cursor-pointer"}
+                          value={form.certificateTemplateId}
+                          onChange={e => upd("certificateTemplateId", e.target.value)}
+                        >
+                          <option value="">No certificate</option>
+                          {certTemplates.map(t => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}{t.isDefault ? " (default)" : ""}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-[12px] text-[#6B6355] mt-2" style={{ fontFamily: "'Public Sans', system-ui, sans-serif" }}>
+                          Attendees can generate this certificate after their attendance is verified. Leave as “No certificate” to issue none.
+                        </p>
                       </div>
                     </FormCard>
                   </motion.div>
