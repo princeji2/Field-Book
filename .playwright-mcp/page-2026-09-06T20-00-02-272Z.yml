@@ -1,3 +1,0 @@
-- generic [ref=f1e2]:
-  - button "390px" [ref=f1e3] [cursor=pointer]
-  - region "Notifications alt+T"

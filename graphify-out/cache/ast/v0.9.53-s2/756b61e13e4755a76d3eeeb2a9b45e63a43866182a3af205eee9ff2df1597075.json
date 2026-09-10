@@ -1,1 +1,0 @@
-{"nodes": [{"id": "$graphify-root$_supabase_migrations_20260818090000_storage_objects_select_policies_sql", "label": "20260818090000_storage_objects_select_policies.sql", "file_type": "code", "source_file": "supabase/migrations/20260818090000_storage_objects_select_policies.sql", "source_location": null}], "edges": []}
