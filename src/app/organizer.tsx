@@ -461,6 +461,14 @@ export function OrganizerDashboard({ onNavigate, isGuest, profile }: { onNavigat
   // until loaded (or if unavailable) so the Live Now card can fall back to the
   // demo event's own numbers rather than showing fabricated/zero counts.
   const [liveCounts, setLiveCounts] = useState<{ checkedIn: number; registered: number } | null>(null);
+  // Real totals for the three metric cards below, aggregated across this
+  // organizer's own events: events created, distinct check-ins, certificates
+  // issued. These are ADDED ON TOP of the demo baselines (18 / 1,247 / 892) —
+  // the cards show baseline + real, never a replacement. null until loaded (or
+  // for guests / on error), in which case the cards show the baseline alone
+  // rather than a fabricated or zeroed figure.
+  const [realMetricTotals, setRealMetricTotals] =
+    useState<{ events: number; attendees: number; certificates: number } | null>(null);
 
   useEffect(() => {
     if (isGuest || !profile?.id) return;
@@ -478,17 +486,41 @@ export function OrganizerDashboard({ onNavigate, isGuest, profile }: { onNavigat
       const mapped = evResult.events.map(ev => eventRowToOrgEvent(ev, counts.get(ev.id) ?? 0));
       setRealEvents(mapped);
 
-      // Best-effort real counts for the live event's progress bar. The
-      // attendees RPC may not be deployed yet — on any error we simply leave
+      // One roster fetch per event (event_attendees RPC, organizer-scoped
+      // server-side). Fetched once here and reused for BOTH the live-event
+      // progress bar and the metric-card totals below, so this adds no extra
+      // round-trips beyond what the live card already needed.
+      const rosterResults = await Promise.all(
+        evResult.events.map(e => listEventAttendees(e.id)),
+      );
+      if (cancelled) return;
+
+      // Real totals across all of this organizer's events. Attendees = distinct
+      // check-ins; certificates = rosters flagged certificateIssued. Rosters
+      // that failed to load contribute 0 rather than aborting the whole total.
+      let attendeesTotal = 0;
+      let certificatesTotal = 0;
+      rosterResults.forEach(r => {
+        if (r.status !== "success") return;
+        attendeesTotal += r.attendees.filter(a => a.checkedIn).length;
+        certificatesTotal += r.attendees.filter(a => a.certificateIssued).length;
+      });
+      setRealMetricTotals({
+        events: evResult.events.length,
+        attendees: attendeesTotal,
+        certificates: certificatesTotal,
+      });
+
+      // Best-effort real counts for the live event's progress bar, reusing the
+      // roster already fetched above. On a failed live-event roster we leave
       // liveCounts null and the card falls back to the demo numbers.
-      const live = evResult.events.find(e => e.status === "live");
-      if (live) {
-        const attResult = await listEventAttendees(live.id);
-        if (cancelled) return;
-        if (attResult.status === "success") {
+      const liveIdx = evResult.events.findIndex(e => e.status === "live");
+      if (liveIdx >= 0) {
+        const liveRoster = rosterResults[liveIdx];
+        if (liveRoster.status === "success") {
           setLiveCounts({
-            checkedIn: attResult.attendees.filter(a => a.checkedIn).length,
-            registered: counts.get(live.id) ?? 0,
+            checkedIn: liveRoster.attendees.filter(a => a.checkedIn).length,
+            registered: counts.get(evResult.events[liveIdx].id) ?? 0,
           });
         }
       }
@@ -622,28 +654,43 @@ export function OrganizerDashboard({ onNavigate, isGuest, profile }: { onNavigat
           </motion.div>
 
           {/* ── Metric cards ── */}
+          {/* Additive: each card shows a demo baseline PLUS this organizer's
+              real total on top (e.g. 18 + 2 real events = 20). realMetricTotals
+              is null for guests / before load / on error, in which case only the
+              baseline is shown — never a bare real count or a fabricated zero. */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[
-              { label: "Events Run",         value: "18",    Icon: ClipboardList, accent: "#E2A23B" },
-              { label: "Total Attendees",    value: "1,247", Icon: Users,         accent: "#2D6A4F" },
-              { label: "Certificates Issued", value: "892",  Icon: Award,         accent: "#E2A23B" },
-            ].map(({ label, value, Icon, accent }, i) => (
-              <motion.div
-                key={label}
-                className="bg-[#FCFAF3] border border-[#1E1B16]/20 rounded-[8px] p-6"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, ease: "easeOut", delay: 0.08 + i * 0.06 }}
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <p className="text-[9px] tracking-widest uppercase" style={{ ...M, color: "#9C8E7E" }}>{label}</p>
-                  <Icon size={13} strokeWidth={1.5} className="flex-shrink-0" style={{ color: accent }} />
-                </div>
-                <p className="text-[2.4rem] font-semibold text-[#1E1B16] leading-none" style={F}>
-                  <StatMetricNumber target={parseMetricNum(value)} formatted={value} color="#1E1B16" duration={550} delay={i * 70} />
-                </p>
-              </motion.div>
-            ))}
+              { label: "Events Run",          baseline: 18,   real: realMetricTotals?.events       ?? 0, Icon: ClipboardList, accent: "#E2A23B" },
+              { label: "Total Attendees",     baseline: 1247, real: realMetricTotals?.attendees    ?? 0, Icon: Users,         accent: "#2D6A4F" },
+              { label: "Certificates Issued", baseline: 892,  real: realMetricTotals?.certificates ?? 0, Icon: Award,         accent: "#E2A23B" },
+            ].map(({ label, baseline, real, Icon, accent }, i) => {
+              const total = baseline + real;
+              // StatMetricNumber derives thousands-separator formatting from
+              // whether `formatted` contains a comma, so pass the localized
+              // total string and the raw numeric target.
+              const formatted = total.toLocaleString("en-US");
+              return (
+                <motion.div
+                  key={label}
+                  className="bg-[#FCFAF3] border border-[#1E1B16]/20 rounded-[8px] p-6"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, ease: "easeOut", delay: 0.08 + i * 0.06 }}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <p className="text-[9px] tracking-widest uppercase" style={{ ...M, color: "#9C8E7E" }}>{label}</p>
+                    <Icon size={13} strokeWidth={1.5} className="flex-shrink-0" style={{ color: accent }} />
+                  </div>
+                  <p className="text-[2.4rem] font-semibold text-[#1E1B16] leading-none" style={F}>
+                    <StatMetricNumber target={total} formatted={formatted} color="#1E1B16" duration={550} delay={i * 70} />
+                  </p>
+                  {/* Small honest label: the figure blends a demo baseline with
+                      real activity. Muted mono, matching this file's other
+                      small captions (text-[9px] + M / #9C8E7E). */}
+                  <p className="text-[9px] mt-2" style={{ ...M, color: "#9C8E7E" }}>incl. sample data</p>
+                </motion.div>
+              );
+            })}
           </div>
 
           {/* ── My Events + Recent Activity ── */}
