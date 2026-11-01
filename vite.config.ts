@@ -36,10 +36,16 @@ export default defineConfig({
         'apple-touch-icon.png',
       ],
       manifest: {
+        // Stable app identity for installability/TWA. Keeping id === start_url
+        // means existing installs are recognised as the same app.
+        id: '/',
         name: 'Field Book',
         short_name: 'Field Book',
         description: 'Event attendance and certification platform',
+        lang: 'en',
         display: 'standalone',
+        orientation: 'portrait-primary',
+        categories: ['education', 'productivity'],
         start_url: '/',
         scope: '/',
         theme_color: '#E2A23B',
@@ -64,14 +70,58 @@ export default defineConfig({
             purpose: 'maskable',
           },
         ],
+        // App shortcuts (long-press the installed icon). Both target existing
+        // routes — no new pages. Student-gated: opening while signed out
+        // redirects through the auth guard to /login, which is acceptable.
+        shortcuts: [
+          {
+            name: 'My Certificates',
+            short_name: 'Certificates',
+            description: 'View your issued certificates',
+            url: '/student/certificates',
+            icons: [{ src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' }],
+          },
+          {
+            name: 'Scan Attendance',
+            short_name: 'Scan',
+            description: 'Scan an event QR code to check in',
+            url: '/student/scanner',
+            icons: [{ src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' }],
+          },
+        ],
+        // Store/install listing screenshots. Real pixel dimensions read from
+        // the source files (do not change these if the images are replaced
+        // without re-measuring). form_factor "wide" = desktop listing,
+        // "narrow" = mobile listing.
+        screenshots: [
+          {
+            src: '/screenshots/homepage-wide.png',
+            sizes: '1023x4944',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: 'Field Book landing page',
+          },
+          {
+            src: '/screenshots/login-narrow.png',
+            sizes: '390x844',
+            type: 'image/png',
+            form_factor: 'narrow',
+            label: 'Field Book sign-in on mobile',
+          },
+        ],
       },
       workbox: {
         // Precache the built app shell.
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,wasm,mjs}'],
-        // SPA deep links -> index.html (mirrors the Vercel rewrite).
+        // SPA deep links -> index.html (mirrors the Vercel rewrite). index.html
+        // is precached, so cached SPA routes load offline instead of the
+        // browser's error page. offline.html is also precached (globPatterns
+        // includes html) as the friendly hard-offline document for packaging
+        // and for the Vercel-side fallback.
         navigateFallback: '/index.html',
-        // Never route API/auth/callback URLs through the SPA fallback.
-        navigateFallbackDenylist: [/^\/api\//, /^\/auth\//],
+        // Never route API/auth/callback URLs or Digital Asset Links through the
+        // SPA fallback — assetlinks.json must be served as its own JSON file.
+        navigateFallbackDenylist: [/^\/api\//, /^\/auth\//, /^\/\.well-known\//],
         // pdfjs worker chunk can exceed the 2 MiB default; lift the ceiling
         // so the build does not silently drop it from the precache.
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,

@@ -1820,7 +1820,14 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
               Sign in
             </button>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Icon-only install on phones (44x44 tap target, no text) so the
+                header isn't crowded at 320px; full "Install app" label from sm
+                up. InstallButton self-hides when already installed or not
+                installable. */}
+            <div className="sm:hidden">
+              <InstallButton variant="ghost" label="Install Field Book" iconOnly />
+            </div>
             <div className="hidden sm:block">
               <InstallButton variant="ghost" />
             </div>

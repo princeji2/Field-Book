@@ -18,10 +18,14 @@ export function InstallButton({
   variant = "ghost",
   className = "",
   label = "Install app",
+  iconOnly = false,
 }: {
   variant?: "primary" | "ghost";
   className?: string;
   label?: string;
+  /** Icon-only square button (44x44). Keeps the tap target without text,
+      for cramped headers at 320px. aria-label still carries `label`. */
+  iconOnly?: boolean;
 }) {
   const { canInstall, isStandalone, isIOS, promptInstall } = usePwaInstall();
   const [showHint, setShowHint] = useState(false);
@@ -30,8 +34,9 @@ export function InstallButton({
   if (isStandalone) return null;
   if (!canInstall && !isIOS) return null;
 
-  const base =
-    "inline-flex items-center justify-center gap-1.5 min-h-[44px] px-4 py-1.5 text-sm font-semibold rounded-[7px] transition-colors";
+  const base = iconOnly
+    ? "inline-flex items-center justify-center w-11 h-11 rounded-[7px] transition-colors"
+    : "inline-flex items-center justify-center gap-1.5 min-h-[44px] px-4 py-1.5 text-sm font-semibold rounded-[7px] transition-colors";
   const styles =
     variant === "primary"
       ? "bg-[#E2A23B] text-[#1E1B16] border border-[#1E1B16]/15 hover:bg-[#CC8F28]"
@@ -47,9 +52,9 @@ export function InstallButton({
 
   return (
     <div className={`relative inline-block ${className}`}>
-      <button type="button" onClick={onClick} className={`${base} ${styles}`} aria-label={label}>
-        <Download size={14} strokeWidth={1.75} />
-        {label}
+      <button type="button" onClick={onClick} className={`${base} ${styles}`} aria-label={label} title={label}>
+        <Download size={iconOnly ? 16 : 14} strokeWidth={1.75} />
+        {!iconOnly && label}
       </button>
 
       {/* iOS manual hint */}

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>You're offline — Field Book</title>
+    <meta name="theme-color" content="#E2A23B" />
+    <style>
+      /* Self-contained: this page must render with no external CSS/JS, since
+         it is served precisely when the network is unavailable. Palette,
+         type roles and the seal motif follow the frozen Fieldbook design
+         system. No shadows, no gradients. */
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        background-color: #F6F1E7;
+        background-image: radial-gradient(circle, rgba(30,27,22,0.09) 1px, transparent 1px);
+        background-size: 22px 22px;
+        color: #1E1B16;
+        font-family: 'Public Sans', system-ui, -apple-system, sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: calc(24px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right))
+                 calc(24px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
+        -webkit-tap-highlight-color: transparent;
+      }
+      .card {
+        background: #FCFAF3;
+        border: 1px solid rgba(30,27,22,0.20);
+        border-radius: 8px;
+        max-width: 360px;
+        width: 100%;
+        padding: 32px 28px;
+        text-align: center;
+      }
+      .seal { width: 72px; height: 72px; display: inline-block; transform: rotate(-8deg); }
+      .eyebrow {
+        font-family: 'IBM Plex Mono', 'Courier New', monospace;
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #6B6355;
+        margin: 18px 0 6px;
+      }
+      h1 {
+        font-family: 'Fraunces', Georgia, serif;
+        font-size: 24px;
+        font-weight: 600;
+        line-height: 1.15;
+        margin: 0 0 10px;
+        color: #1E1B16;
+      }
+      p {
+        font-size: 14px;
+        line-height: 1.55;
+        color: #6B6355;
+        margin: 0 0 22px;
+      }
+      button {
+        appearance: none;
+        min-height: 44px;
+        padding: 10px 24px;
+        background: #E2A23B;
+        color: #1E1B16;
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        border: 1px solid rgba(30,27,22,0.15);
+        border-radius: 7px;
+        cursor: pointer;
+        touch-action: manipulation;
+        transition: background 0.15s;
+      }
+      button:hover { background: #CC8F28; }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <!-- Fieldbook seal (static). Geometry mirrors CertificateSeal; no arc
+           text so it stays crisp without the mono webfont loaded offline. -->
+      <svg class="seal" viewBox="0 0 88 88" aria-hidden="true">
+        <polygon points="" id="tick" fill="#E2A23B"></polygon>
+        <circle cx="44" cy="44" r="36" fill="#E2A23B"></circle>
+        <circle cx="44" cy="44" r="33.5" fill="none" stroke="#1E1B16" stroke-width="0.75"></circle>
+        <circle cx="44" cy="44" r="26.5" fill="none" stroke="#1E1B16" stroke-width="0.75" stroke-dasharray="2 1.5"></circle>
+        <path d="M34.3,45.8 L42.7,53.7 L55.4,36.1" stroke="#1E1B16" stroke-width="2.4"
+              stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+      </svg>
+
+      <div class="eyebrow">· Field Book ·</div>
+      <h1>You're offline</h1>
+      <p>We can't reach the network right now. Check your connection and try again — your signed-in session and cached pages will pick up where you left off.</p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+
+    <script>
+      // Build the scalloped tick ring to match the seal's outer edge. Inline
+      // so the page needs nothing external while offline.
+      (function () {
+        var r = 44, pts = [];
+        for (var i = 0; i < 64; i++) {
+          var a = (i / 64) * Math.PI * 2 - Math.PI / 2;
+          var rad = i % 2 === 0 ? r - 1 : r - 5.5;
+          pts.push((r + Math.cos(a) * rad).toFixed(2) + ',' + (r + Math.sin(a) * rad).toFixed(2));
+        }
+        var el = document.getElementById('tick');
+        if (el) el.setAttribute('points', pts.join(' '));
+      })();
+
+      // Auto-retry the moment connectivity returns.
+      window.addEventListener('online', function () { location.reload(); });
+    </script>
+  </body>
+</html>
