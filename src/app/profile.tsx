@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { ArrowLeft, Check, Upload, Trash2, RefreshCw, Eye, EyeOff, LogOut, AlertTriangle, UserCog, Clock, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { F, M, dotGrid } from "./shared";
+import { InstallButton } from "./components/InstallButton";
 import { updateAvatarUrl } from "../lib/auth";
 import { uploadToBucket, buildObjectPath } from "../lib/storage";
 import {
@@ -541,6 +542,19 @@ export function ProfileScreen({
                 rows={3} className={`${inputCls} resize-none`}
                 placeholder="Tell us a bit about yourself…" style={PS} />
             </ProfileRow>
+          </SectionCard>
+
+          {/* ── Install app ── */}
+          <SectionCard title="Install Field Book" subtitle="Add the app to your device for a full-screen, native experience">
+            <div className="px-5 py-4 flex items-center justify-between gap-4">
+              <p className="text-sm text-[#6B6355] leading-relaxed">
+                Install Field Book on your phone or desktop. If you don't see a button,
+                the app is already installed or your browser doesn't support install.
+              </p>
+              <div className="flex-shrink-0">
+                <InstallButton variant="primary" label="Install" />
+              </div>
+            </div>
           </SectionCard>
 
           {/* ── Notifications ── */}

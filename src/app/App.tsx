@@ -81,6 +81,8 @@ export default function App() {
     )}
     <Toaster
       position="bottom-right"
+      offset={{ bottom: "calc(16px + env(safe-area-inset-bottom))", right: "calc(16px + env(safe-area-inset-right))" }}
+      mobileOffset={{ bottom: "calc(16px + env(safe-area-inset-bottom))", left: "16px", right: "16px" }}
       toastOptions={{
         style: {
           background: "#FCFAF3",

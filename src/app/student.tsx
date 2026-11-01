@@ -19,7 +19,7 @@ import {
 } from "./shared";
 import { ProfileScreen } from "./profile";
 import { type AuthedProfile } from "../lib/auth";
-import { generateCertificateWithRetry, generateCertificateCode } from "../lib/certificates";
+import { generateCertificateWithRetry, generateCertificateCode, downloadCertificate as downloadCertificateFile } from "../lib/certificates";
 import { listMyCertificates, type StudentCertificate } from "../lib/studentCertificates";
 import { recordAttendance, listMyAttendance, type AttendedEvent } from "../lib/attendance";
 import {
@@ -40,6 +40,45 @@ import {
   getEventByCode,
   formatEventDate,
 } from "../lib/events";
+
+/**
+ * Small "Download" button for an issued certificate. Fetches the PDF as a
+ * blob and saves it (reliable in standalone PWA / Android TWA, where
+ * target="_blank" can misbehave). On failure — most often a cross-origin
+ * Storage URL without CORS — it falls back to opening the URL in a new tab,
+ * matching the plain <a> link the row already renders. Design-system styling
+ * only: outline-ink button, no shadow.
+ */
+function CertDownloadButton({ url, code }: { url: string; code: string }) {
+  const [busy, setBusy] = useState(false);
+  async function onClick(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (busy) return;
+    setBusy(true);
+    const result = await downloadCertificateFile(url, `fieldbook-certificate-${code}`);
+    setBusy(false);
+    if (result.status === "error") {
+      toast(result.message);
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      aria-label="Download certificate"
+      className="flex items-center justify-center gap-1.5 min-h-[44px] px-3 py-2 border border-[#1E1B16]/25 text-[11px] text-[#1E1B16] rounded-[7px] hover:bg-[#F6F1E7] hover:border-[#1E1B16]/40 transition-colors disabled:opacity-50"
+      style={M}
+    >
+      {busy
+        ? <RefreshCw size={12} strokeWidth={1.5} className="animate-spin" />
+        : <Download size={12} strokeWidth={1.5} className="text-[#E2A23B]" />}
+      Download
+    </button>
+  );
+}
 
 // ─── Student Dashboard ────────────────────────────────────────────────────────
 export function StudentDashboard({ onNavigate, isGuest, profile }: { onNavigate?: (s: Screen, eventId?: string) => void; isGuest?: boolean; profile?: AuthedProfile | null }) {
@@ -1767,23 +1806,28 @@ function PastRow({
           ) : (
             <AnimatePresence mode="wait">
               {certGotten ? (
-                <motion.a
+                <motion.div
                   key="cert-done"
-                  href={certUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
                   initial={{ opacity: 0, scale: 0.85 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.25, ease: "easeOut" }}
-                  className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
-                  title={certUrl ? "View / download certificate" : undefined}
+                  className="flex flex-col items-end gap-2"
                 >
-                  <CertificateSeal size={44} rotate={-9} delay={0.1} />
-                  <div className="space-y-0.5">
-                    <div className="text-[8px] font-medium text-[#2E6B4C]" style={M}>Certificate Issued</div>
-                    <div className="text-[8px] text-[#6B6355]" style={M}>{ev.code}</div>
-                  </div>
-                </motion.a>
+                  <a
+                    href={certUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
+                    title={certUrl ? "View certificate" : undefined}
+                  >
+                    <CertificateSeal size={44} rotate={-9} delay={0.1} />
+                    <div className="space-y-0.5">
+                      <div className="text-[8px] font-medium text-[#2E6B4C]" style={M}>Certificate Issued</div>
+                      <div className="text-[8px] text-[#6B6355]" style={M}>{ev.code}</div>
+                    </div>
+                  </a>
+                  {certUrl && <CertDownloadButton url={certUrl} code={ev.code} />}
+                </motion.div>
               ) : status === "loading" ? (
                 <motion.div
                   key="cert-loading"
@@ -1854,23 +1898,28 @@ function PastRow({
           <div className="pt-2 border-t border-[#DCD4C2]">
             <AnimatePresence mode="wait">
               {certGotten ? (
-                <motion.a
+                <motion.div
                   key="cert-done-m"
-                  href={certUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
                   initial={{ opacity: 0, scale: 0.85 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.25, ease: "easeOut" }}
-                  className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
-                  title={certUrl ? "View / download certificate" : undefined}
+                  className="flex items-center justify-between gap-3"
                 >
-                  <CertificateSeal size={40} rotate={-9} delay={0.1} />
-                  <div className="space-y-0.5">
-                    <div className="text-[8px] font-medium text-[#2E6B4C]" style={M}>Certificate Issued</div>
-                    <div className="text-[8px] text-[#6B6355]" style={M}>{ev.code}</div>
-                  </div>
-                </motion.a>
+                  <a
+                    href={certUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2.5 hover:opacity-80 transition-opacity"
+                    title={certUrl ? "View certificate" : undefined}
+                  >
+                    <CertificateSeal size={40} rotate={-9} delay={0.1} />
+                    <div className="space-y-0.5">
+                      <div className="text-[8px] font-medium text-[#2E6B4C]" style={M}>Certificate Issued</div>
+                      <div className="text-[8px] text-[#6B6355]" style={M}>{ev.code}</div>
+                    </div>
+                  </a>
+                  {certUrl && <CertDownloadButton url={certUrl} code={ev.code} />}
+                </motion.div>
               ) : status === "loading" ? (
                 <motion.div
                   key="cert-loading-m"
@@ -2500,7 +2549,7 @@ export function ScannerScreen({
     <div className="min-h-screen bg-[#F6F1E7] flex flex-col" style={dotGrid}>
 
       {/* ── Top bar ── */}
-      <header className="h-14 flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] flex items-center justify-between px-4 sm:px-6">
+      <header className="h-14 flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] flex items-center justify-between px-4 sm:px-6 pt-safe pl-safe pr-safe">
         <div className="flex items-center gap-2.5">
           <BookMarked size={15} className="text-[#E2A23B]" strokeWidth={1.75} />
           <span className="text-base font-semibold text-[#1E1B16] tracking-tight" style={F}>Fieldbook</span>

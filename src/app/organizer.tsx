@@ -19,7 +19,7 @@ import {
   CertificateSeal, InlineSeal,
   CountUp, parseMetricNum, StatMetricNumber, HeroLedger,
   DemoCreate, DemoScan, DemoCert,
-  useSidebarState, SidebarFrame,
+  useSidebarState, SidebarFrame, MobileBottomNav,
 } from "./shared";
 import { SealBadge } from "./student";
 import { ProfileScreen } from "./profile";
@@ -43,6 +43,7 @@ import {
   Sheet, SheetTrigger, SheetContent, SheetClose, SheetTitle,
 } from "./components/ui/sheet";
 import { AnimatedBackground } from "./components/AnimatedBackground";
+import { InstallButton } from "./components/InstallButton";
 
 // ─── Organizer shell ──────────────────────────────────────────────────────────
 
@@ -53,6 +54,16 @@ const ORG_NAV_ITEMS = [
   { id: "org-attendees",  label: "Attendee Manager", icon: Users         },
   { id: "org-analytics",  label: "Analytics",        icon: BarChart3     },
   { id: "org-certs",      label: "Certificates",     icon: Award         },
+] as const;
+
+// Mobile bottom-nav subset (5 primary sections). Short labels for a compact
+// bar at 320px; QR Display is reachable from the Events workspace on mobile.
+const ORG_BOTTOM_NAV = [
+  { id: "org-dashboard",  label: "Home",      icon: Home          },
+  { id: "org-events",     label: "Events",    icon: ClipboardList },
+  { id: "org-attendees",  label: "Attendees", icon: Users         },
+  { id: "org-analytics",  label: "Analytics", icon: BarChart3     },
+  { id: "org-certs",      label: "Certs",     icon: Award         },
 ] as const;
 
 function OrgAppShell({
@@ -84,6 +95,7 @@ function OrgAppShell({
 
   return (
     <SidebarFrame isMobile={isMobile} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} sidebarCollapsed={sidebarCollapsed}
+      bottomNav={<MobileBottomNav items={ORG_BOTTOM_NAV} activeNav={activeNav} onNav={onNav} notifCount={notifCount} />}
       sidebar={<>
         {/* Logo + toggle */}
         <div className={`h-14 border-b border-[#DCD4C2] flex-shrink-0 flex items-center ${sidebarCollapsed ? "justify-center px-3" : "px-3 gap-2"}`}>
@@ -168,7 +180,7 @@ function OrgAppShell({
         </div>
       </>}>
       {/* ── Top bar ── */}
-      <header className="min-h-14 flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:h-14 sm:py-0 sm:px-8">
+      <header className="min-h-14 flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:h-14 sm:py-0 sm:px-8 pt-safe pl-safe pr-safe">
           {isMobile && (
             <button
               type="button"
@@ -1809,6 +1821,9 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
             </button>
           </div>
           <div className="flex items-center gap-3">
+            <div className="hidden sm:block">
+              <InstallButton variant="ghost" />
+            </div>
             <button
               onClick={() => onNavigate("admin-login")}
               className="px-4 py-1.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2 transition-colors"

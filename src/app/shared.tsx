@@ -319,7 +319,7 @@ export function DemoCreate() {
       </div>
 
       {/* Generated QR card */}
-      <div className="flex-shrink-0 bg-[#FCFAF3] border border-[#DCD4C2] rounded-[7px] p-5 flex flex-col items-center justify-between gap-4 min-w-[160px]">
+      <div className="flex-shrink-0 bg-[#FCFAF3] border border-[#DCD4C2] rounded-[7px] p-5 flex flex-col items-center justify-between gap-4 w-full md:w-auto md:min-w-[160px]">
         <div className="text-[9px] tracking-widest text-[#6B6355] uppercase w-full" style={M}>Generated QR</div>
         <div className="p-2.5 border border-[#DCD4C2] rounded-[6px] bg-white">
           <MockQR size={100} />
@@ -357,7 +357,7 @@ export function DemoScan() {
       className="flex flex-col md:flex-row gap-5"
     >
       {/* QR + scan line */}
-      <div className="flex-shrink-0 bg-[#FCFAF3] border border-[#DCD4C2] rounded-[7px] p-5 flex flex-col items-center gap-4 min-w-[160px]">
+      <div className="flex-shrink-0 bg-[#FCFAF3] border border-[#DCD4C2] rounded-[7px] p-5 flex flex-col items-center gap-4 w-full md:w-auto md:min-w-[160px]">
         <div className="text-[9px] tracking-widest text-[#6B6355] uppercase w-full" style={M}>Scan to Attend</div>
         <div className="relative p-2.5 border border-[#DCD4C2] rounded-[6px] bg-white overflow-hidden">
           <MockQR size={100} />
@@ -1493,6 +1493,16 @@ export const NAV_ITEMS = [
   { id: "notifs",    label: "Notifications",  icon: Bell     },
 ] as const;
 
+// Mobile bottom-nav subset (5 primary sections; Notifications stays reachable
+// via the header bell). Shorter labels so they fit a compact bar at 320px.
+export const STUDENT_BOTTOM_NAV = [
+  { id: "dashboard", label: "Home",     icon: Home     },
+  { id: "explore",   label: "Explore",  icon: Compass  },
+  { id: "events",    label: "Events",   icon: Calendar },
+  { id: "scanner",   label: "Scan",     icon: Scan     },
+  { id: "certs",     label: "Certs",    icon: Award    },
+] as const;
+
 // ─── Shared sidebar state hook ───────────────────────────────────────────────
 export function useSidebarState() {
   const [collapsed,  setCollapsed]  = useState(false);
@@ -1524,8 +1534,71 @@ export function useSidebarState() {
 }
 
 // ─── Shared sidebar frame (backdrop + motion.aside + main column) ─────────────
+/** A single nav entry, shared shape across all three role nav arrays. */
+export type BottomNavItem = {
+  readonly id: string;
+  readonly label: string;
+  readonly icon: React.ComponentType<{ size?: number; strokeWidth?: number; style?: React.CSSProperties }>;
+};
+
+/**
+ * Compact fixed bottom navigation for mobile (< md). Mirrors the desktop
+ * sidebar nav items so signed-in Student / Organizer / Admin views have a
+ * reachable primary nav on phones, where the sidebar is a slide-over. Shown
+ * only on mobile; the sidebar remains the nav on >= md. Uses the frozen
+ * design-system vocabulary only (paper surface, ink/marigold, hairline top
+ * border, no shadow). Bottom safe-area padding keeps the bar above the home
+ * indicator in standalone mode.
+ */
+export function MobileBottomNav({
+  items, activeNav, onNav, notifCount = 0,
+}: {
+  items: readonly BottomNavItem[];
+  activeNav: string;
+  onNav?: (id: string) => void;
+  notifCount?: number;
+}) {
+  const shown = items.slice(0, 5);
+  return (
+    <nav
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#FCFAF3] border-t border-[#DCD4C2] pb-safe-nav pl-safe pr-safe"
+      aria-label="Primary"
+    >
+      <div className="flex items-stretch">
+        {shown.map(({ id, label, icon: Icon }) => {
+          const active = activeNav === id;
+          const hasBadge = id === "notifs" && notifCount > 0;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onNav?.(id)}
+              aria-label={label}
+              aria-current={active ? "page" : undefined}
+              className="relative flex-1 min-h-[52px] flex flex-col items-center justify-center gap-1 pt-2 pb-1.5 transition-colors"
+            >
+              <span className="relative flex items-center justify-center">
+                <Icon size={20} strokeWidth={1.5} style={{ color: active ? "#E2A23B" : "#6B6355" }} />
+                {hasBadge && (
+                  <span className="absolute -top-1 -right-1.5 w-[7px] h-[7px] rounded-full bg-[#E2A23B]" />
+                )}
+              </span>
+              <span
+                className="text-[9px] leading-none tracking-wide"
+                style={{ ...M, color: active ? "#1E1B16" : "#6B6355" }}
+              >
+                {label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
 export function SidebarFrame({
-  isMobile, mobileOpen, setMobileOpen, sidebarCollapsed, sidebar, children,
+  isMobile, mobileOpen, setMobileOpen, sidebarCollapsed, sidebar, children, bottomNav,
 }: {
   isMobile: boolean;
   mobileOpen: boolean;
@@ -1533,6 +1606,8 @@ export function SidebarFrame({
   sidebarCollapsed: boolean;
   sidebar: React.ReactNode;
   children: React.ReactNode;
+  /** Optional mobile bottom nav; rendered fixed and only visible < md. */
+  bottomNav?: React.ReactNode;
 }) {
   return (
     <div className="flex h-screen bg-[#F6F1E7] overflow-hidden">
@@ -1555,14 +1630,15 @@ export function SidebarFrame({
         initial={false}
         transition={{ duration: 0.22, ease: "easeOut" }}
         className={`bg-[#FCFAF3] border-r border-[#DCD4C2] flex flex-col overflow-hidden flex-shrink-0 ${
-          isMobile ? "fixed inset-y-0 left-0 z-50" : ""
+          isMobile ? "fixed inset-y-0 left-0 z-50 pt-safe pb-safe" : ""
         }`}
       >
         {sidebar}
       </motion.aside>
-      <div className="flex-1 flex flex-col min-h-0 min-w-0">
+      <div className={`flex-1 flex flex-col min-h-0 min-w-0 ` + (bottomNav ? "pb-[calc(56px+env(safe-area-inset-bottom))] md:pb-0" : "")}>
         {children}
       </div>
+      {bottomNav}
     </div>
   );
 }
@@ -1597,6 +1673,7 @@ export function AppShell({
 
   return (
     <SidebarFrame isMobile={isMobile} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} sidebarCollapsed={sidebarCollapsed}
+      bottomNav={<MobileBottomNav items={STUDENT_BOTTOM_NAV} activeNav={activeNav} onNav={onNav} notifCount={notifCount} />}
       sidebar={<>
         {/* Logo + toggle */}
         <div className={`h-14 border-b border-[#DCD4C2] flex-shrink-0 flex items-center ${sidebarCollapsed ? "justify-center px-3" : "px-3 gap-2"}`}>
@@ -1722,7 +1799,7 @@ export function AppShell({
         </div>
       </>}>
       {/* ── Top bar ── */}
-      <header className="h-14 flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] flex items-center justify-between px-4 sm:px-8">
+      <header className="h-14 flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] flex items-center justify-between px-4 sm:px-8 pt-safe pl-safe pr-safe">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {isMobile && (
               <button

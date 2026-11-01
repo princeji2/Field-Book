@@ -178,3 +178,43 @@
     line-height: 1.5;
   }
 }
+
+/* ── PWA / installed-app touch ergonomics ──────────────────────────────────
+   Applies in every context (browser + standalone). Kept additive and off the
+   design-system surface — no colors, fonts, shadows or radii are touched. */
+@layer base {
+  html {
+    /* Avoid the 300 ms tap delay and double-tap zoom on interactive UI, and
+       remove the grey flash iOS/Android paint on tap. */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* Stop pull-to-refresh / scroll chaining from firing behind the fixed app
+     shell in standalone mode. The shell itself owns a full-height scroll area. */
+  html, body, #root {
+    overscroll-behavior-y: contain;
+  }
+}
+
+/* ── Safe-area helpers (notch / home indicator in display-mode: standalone) ──
+   env(safe-area-inset-*) is 0 on devices without insets, so these are inert on
+   desktop and non-notched phones. Combined with viewport-fit=cover in
+   index.html. */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@utility pl-safe {
+  padding-left: env(safe-area-inset-left);
+}
+@utility pr-safe {
+  padding-right: env(safe-area-inset-right);
+}
+/* Adds the bottom inset on top of an existing padding value (used by the
+   mobile bottom nav so the bar clears the home indicator). */
+@utility pb-safe-nav {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+}

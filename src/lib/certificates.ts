@@ -272,3 +272,42 @@ async function handleResponse(
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+// ─── Certificate download (installed-app friendly) ──────────────────────────
+// In a standalone PWA / Android TWA, <a target="_blank"> may open an external
+// browser tab or a blank window instead of letting the user save the file.
+// This fetches the PDF as a blob and triggers a real download via an object
+// URL, which behaves consistently in standalone mode. Callers keep the plain
+// <a href> link as a fallback for the rare case where fetch is blocked (e.g.
+// a cross-origin Storage URL without permissive CORS).
+
+export type DownloadResult = { status: "success" } | { status: "error"; message: string };
+
+/**
+ * Fetches `url` and saves it as `filename`. Uses a blob + object URL so the
+ * browser treats it as a download rather than a navigation. Revokes the
+ * object URL afterwards to avoid leaking it.
+ */
+export async function downloadCertificate(url: string, filename: string): Promise<DownloadResult> {
+  try {
+    const res = await fetch(url, { credentials: "omit" });
+    if (!res.ok) {
+      return { status: "error", message: `Could not fetch the certificate (${res.status}).` };
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename.toLowerCase().endsWith(".pdf") ? filename : `${filename}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Revoke on the next tick so the click has a chance to start the download.
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    return { status: "success" };
+  } catch {
+    // Most commonly a CORS failure on the Storage URL. The caller shows the
+    // plain link as a fallback so the user can still open it in that case.
+    return { status: "error", message: "Download blocked. Opening the certificate in a new tab instead." };
+  }
+}

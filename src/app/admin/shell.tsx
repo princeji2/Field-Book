@@ -5,7 +5,7 @@ import {
   BarChart3, Settings, Bell, Eye, ChevronLeft, Plus,
   ArrowLeft, User, LogOut, UserCog,
 } from "lucide-react";
-import { F, M, useSidebarState, SidebarFrame } from "../shared";
+import { F, M, useSidebarState, SidebarFrame, MobileBottomNav } from "../shared";
 
 // ─── Admin nav ────────────────────────────────────────────────────────────────
 
@@ -18,6 +18,16 @@ const ADMIN_NAV_ITEMS = [
   { id:"admin-analytics",  label:"Analytics",             icon:BarChart3    },
   { id:"admin-settings",   label:"Settings",              icon:Settings     },
   { id:"admin-notifs",     label:"Notifications",         icon:Bell         },
+] as const;
+
+// Mobile bottom-nav subset (5 primary sections). Role Requests, Settings and
+// Notifications stay reachable from the slide-over sidebar on mobile.
+const ADMIN_BOTTOM_NAV = [
+  { id:"admin-dashboard",  label:"Home",      icon:Home         },
+  { id:"admin-approvals",  label:"Approvals", icon:CheckCircle2 },
+  { id:"admin-users",      label:"Users",     icon:Users        },
+  { id:"admin-templates",  label:"Templates", icon:FileText     },
+  { id:"admin-analytics",  label:"Analytics", icon:BarChart3    },
 ] as const;
 
 type AdminNavId = typeof ADMIN_NAV_ITEMS[number]["id"];
@@ -88,6 +98,7 @@ export function AdminAppShell({
   return (
     <>
     <SidebarFrame isMobile={isMobile} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} sidebarCollapsed={sidebarCollapsed}
+      bottomNav={<MobileBottomNav items={ADMIN_BOTTOM_NAV} activeNav={activeNav} onNav={onNav} notifCount={notifCount} />}
       sidebar={<>
         {/* Logo + toggle */}
         <div className={`h-14 border-b border-[#DCD4C2] flex-shrink-0 flex items-center ${sidebarCollapsed ? "justify-center px-3" : "px-3 gap-2"}`}>
@@ -181,7 +192,7 @@ export function AdminAppShell({
         </div>
       </>}>
       {/* ── Top bar ── */}
-      <header className="flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] px-4 py-2 sm:px-8 sm:py-0 sm:h-14">
+      <header className="flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] px-4 py-2 sm:px-8 sm:py-0 sm:h-14 pt-safe pl-safe pr-safe">
         {/* Row 1: hamburger + title + bell + avatar */}
         <div className="flex items-center gap-3 min-h-[40px] sm:min-h-[56px]">
           {isMobile && (
