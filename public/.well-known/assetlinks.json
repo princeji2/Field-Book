@@ -1,1 +1,10 @@
-[]
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "social.orgs.fieldbook.twa",
+    "sha256_cert_fingerprints": [
+      "A8:D0:60:45:AF:00:9B:56:70:56:8E:EF:09:4A:D1:AF:DF:A2:E8:32:42:EA:59:73:5F:62:23:09:7F:91:23:85"
+    ]
+  }
+}]
