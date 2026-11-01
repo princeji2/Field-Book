@@ -10,6 +10,10 @@ export default function App() {
   const [mobileScale,   setMobileScale]   = useState(1);
   // Detect when this instance is running inside the preview iframe
   const isEmbedded = window.self !== window.top;
+  // The 390 px mobile-preview harness is a development aid only. Gate it behind
+  // import.meta.env.DEV so it is tree-shaken out of production builds and never
+  // renders in the deployed site or the installed PWA/APK.
+  const showMobilePreview = import.meta.env.DEV && !isEmbedded;
 
   useEffect(() => {
     function calc() {
@@ -24,7 +28,7 @@ export default function App() {
   return (
     <>
     {/* ── Dev-only: mobile preview toggle (suppressed inside the preview iframe) ── */}
-    {!isEmbedded && (
+    {showMobilePreview && (
       <button
         type="button"
         onClick={() => setMobilePreview(p => !p)}
@@ -55,7 +59,7 @@ export default function App() {
     </BrowserRouter>
 
     {/* ── Mobile preview: true 390 px iframe viewport ── */}
-    {!isEmbedded && mobilePreview && (
+    {showMobilePreview && mobilePreview && (
       <div style={{
         position: "fixed", inset: 0, zIndex: 9990,
         background: "#19140F",

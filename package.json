@@ -1,12 +1,13 @@
 {
-  "name": "@figma/my-make-file",
+  "name": "field-book",
   "private": true,
   "version": "0.0.1",
   "type": "module",
   "scripts": {
     "build": "tsc -b --force && vite build",
     "dev": "vite",
-    "typecheck": "tsc -b --force"
+    "typecheck": "tsc -b --force",
+    "preview": "vite preview"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -69,13 +70,15 @@
     "vaul": "1.1.2"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "4.1.12",
     "@types/node": "26.2.0",
     "@types/react-dom": "19.2.4",
     "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
     "typescript": "^7.0.2",
-    "vite": "6.3.5"
+    "vite": "6.3.5",
+    "vite-plugin-pwa": "^0.21.2"
   },
   "peerDependencies": {
     "react": "18.3.1",
