@@ -1914,7 +1914,7 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
       <main>
 
         {/* ══ Hero ══════════════════════════════════════════════════════════ */}
-        <section className="max-w-6xl mx-auto px-6 pt-24 pb-28 grid grid-cols-1 lg:grid-cols-[1fr,auto] gap-16 items-center">
+        <section className="max-w-7xl mx-auto px-6 py-16 lg:py-20 grid grid-cols-1 lg:grid-cols-2 gap-12 xl:gap-20 items-center">
           <div className="max-w-[500px]">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#FCFAF3] border border-[#DCD4C2] rounded-full mb-8">
               <span className="w-1.5 h-1.5 rounded-full bg-[#2E6B4C]" />
@@ -1953,7 +1953,7 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
             />
           </div>
 
-          <div className="flex justify-center lg:justify-end">
+          <div className="w-full max-w-[520px] mx-auto lg:mx-0 lg:justify-self-end">
             <HeroLedger />
           </div>
         </section>
