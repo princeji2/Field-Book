@@ -1564,7 +1564,7 @@ export function MobileBottomNav({
       className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#FCFAF3] border-t border-[#DCD4C2] pb-safe-nav pl-safe pr-safe"
       aria-label="Primary"
     >
-      <div className="flex items-stretch">
+      <div className="grid grid-cols-5 h-16">
         {shown.map(({ id, label, icon: Icon }) => {
           const active = activeNav === id;
           const hasBadge = id === "notifs" && notifCount > 0;
@@ -1575,16 +1575,16 @@ export function MobileBottomNav({
               onClick={() => onNav?.(id)}
               aria-label={label}
               aria-current={active ? "page" : undefined}
-              className="relative flex-1 min-h-[52px] flex flex-col items-center justify-center gap-1 pt-2 pb-1.5 transition-colors"
+              className="relative min-w-0 flex flex-col items-center justify-center gap-1 px-0.5 transition-colors"
             >
               <span className="relative flex items-center justify-center">
-                <Icon size={20} strokeWidth={1.5} style={{ color: active ? "#E2A23B" : "#6B6355" }} />
+                <Icon size={22} strokeWidth={1.5} style={{ color: active ? "#E2A23B" : "#6B6355" }} />
                 {hasBadge && (
                   <span className="absolute -top-1 -right-1.5 w-[7px] h-[7px] rounded-full bg-[#E2A23B]" />
                 )}
               </span>
               <span
-                className="text-[9px] leading-none tracking-wide"
+                className="max-w-full truncate whitespace-nowrap text-[10px] leading-none tracking-normal"
                 style={{ ...M, color: active ? "#1E1B16" : "#6B6355" }}
               >
                 {label}
@@ -1635,7 +1635,7 @@ export function SidebarFrame({
       >
         {sidebar}
       </motion.aside>
-      <div className={`flex-1 flex flex-col min-h-0 min-w-0 ` + (bottomNav ? "pb-[calc(56px+env(safe-area-inset-bottom))] md:pb-0" : "")}>
+      <div className={`flex-1 flex flex-col min-h-0 min-w-0 max-w-full overflow-x-hidden ` + (bottomNav ? "pb-[calc(4rem+env(safe-area-inset-bottom)+1rem)] md:pb-0" : "")}>
         {children}
       </div>
       {bottomNav}

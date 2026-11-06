@@ -192,7 +192,7 @@ export function AdminAppShell({
         </div>
       </>}>
       {/* ── Top bar ── */}
-      <header className="flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] px-4 py-2 sm:px-8 sm:py-0 sm:h-14 pt-safe pl-safe pr-safe">
+      <header className="flex-shrink-0 bg-[#F6F1E7] border-b border-[#DCD4C2] px-4 py-2 sm:px-8 sm:py-0 sm:h-14 pt-safe">
         {/* Row 1: hamburger + title + bell + avatar */}
         <div className="flex items-center gap-3 min-h-[40px] sm:min-h-[56px]">
           {isMobile && (
@@ -200,17 +200,17 @@ export function AdminAppShell({
               type="button"
               onClick={() => setMobileOpen(v => !v)}
               aria-label="Open navigation menu"
-              className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-[6px] text-[#1E1B16] hover:bg-[#EDE7DA] transition-colors">
-              <Menu size={14} strokeWidth={1.75} />
+              className="flex-shrink-0 w-10 h-10 sm:w-8 sm:h-8 flex items-center justify-center rounded-[6px] text-[#1E1B16] hover:bg-[#EDE7DA] transition-colors">
+              <Menu size={24} className="sm:w-[14px] sm:h-[14px]" strokeWidth={1.75} />
             </button>
           )}
           <div className="flex-1 min-w-0 overflow-hidden">
             {topBarLeft ?? (
               <div>
-                <p className="text-[13px] font-semibold text-[#1E1B16] leading-tight truncate" style={F}>
+                <p className="text-base sm:text-[13px] font-semibold text-[#1E1B16] leading-tight truncate" style={F}>
                   {greeting}, {adminName.split(" ")[0]}.
                 </p>
-                <p className="text-[9px] mt-[1px]" style={{ ...M, color:"#9C8E7E" }}>
+                <p className="text-xs sm:text-[9px] mt-[1px] truncate tracking-tight sm:tracking-normal" style={{ ...M, color:"#9C8E7E" }}>
                   Platform Administrator · Fieldbook
                 </p>
               </div>
@@ -233,10 +233,10 @@ export function AdminAppShell({
           {/* Bell */}
           <button type="button"
             onClick={() => onNav?.("admin-notifs")}
-            className="relative p-1 flex-shrink-0" aria-label="Notifications">
-            <Bell size={15} strokeWidth={1.5} color="#6B6355" />
+            className="relative w-10 h-10 sm:w-auto sm:h-auto sm:p-1 flex items-center justify-center flex-shrink-0" aria-label="Notifications">
+            <Bell size={20} className="sm:w-[15px] sm:h-[15px]" strokeWidth={1.5} color="#6B6355" />
             {notifCount > 0 && (
-              <span className="absolute top-0 right-0 w-[7px] h-[7px] rounded-full border border-[#F6F1E7]" style={{ background:"#E2A23B" }} />
+              <span className="absolute top-2 right-2 sm:top-0 sm:right-0 w-[7px] h-[7px] rounded-full border border-[#F6F1E7]" style={{ background:"#E2A23B" }} />
             )}
           </button>
           {/* Avatar — opens profile menu */}
@@ -246,7 +246,7 @@ export function AdminAppShell({
               type="button"
               aria-label="Profile menu"
               onClick={() => { setSwitchOpen(false); setMenuOpen(v => !v); }}
-              className="w-8 h-8 rounded-full flex items-center justify-center transition-opacity hover:opacity-80"
+              className="w-9 h-9 sm:w-8 sm:h-8 rounded-full flex items-center justify-center transition-opacity hover:opacity-80"
               style={{ background:"rgba(181,67,46,0.12)", border:"1px solid rgba(181,67,46,0.3)" }}>
               <span className="text-[10px] font-semibold select-none" style={{ color:"#8A2210" }}>{initials}</span>
             </button>

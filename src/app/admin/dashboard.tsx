@@ -246,9 +246,9 @@ export function AdminDashboard({
                 />
               </div>
             )}
-            <div className="px-6 py-5 flex flex-col sm:flex-row items-start justify-between gap-6">
+            <div className="p-4 sm:px-6 sm:py-5 flex flex-col sm:flex-row items-start justify-between gap-4 sm:gap-6">
               <div className="flex-1 min-w-0 w-full">
-                <div className="flex items-center gap-3 mb-3">
+                <div className="flex flex-wrap items-center gap-2 mb-3">
                   {loadingApprovals ? (
                     <span className="inline-flex items-center gap-[6px] px-2.5 py-[5px] rounded-full text-[8px] font-semibold tracking-[0.12em] uppercase"
                       style={{ ...M, background:"rgba(30,27,22,0.05)", border:"1px solid rgba(30,27,22,0.12)", color:"#6B6355" }}>
@@ -289,7 +289,7 @@ export function AdminDashboard({
                     </div>
                   </>
                 ) : pendingCount > 0 ? (
-                  <h2 className="text-[1.45rem] font-semibold text-[#1E1B16] leading-[1.2] mb-3" style={F}>
+                  <h2 className="text-2xl sm:text-[1.45rem] font-semibold text-[#1E1B16] leading-[1.2] mb-3" style={F}>
                     Needs Attention
                   </h2>
                 ) : (
@@ -301,24 +301,24 @@ export function AdminDashboard({
                   <div className="space-y-2">
                     {pendingApprovals.slice(0,3).map((ap, i) => (
                       <motion.div key={ap.id}
-                        className="flex items-start gap-3 py-2.5 border-b border-[#DCD4C2] last:border-none"
+                        className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3 py-2.5 border-b border-[#DCD4C2] last:border-none"
                         initial={{ opacity:0, x:-6 }} animate={{ opacity:1, x:0 }}
                         transition={{ duration:0.2, delay:0.08 + i*0.05 }}>
-                        <div className="w-1.5 h-1.5 rounded-full bg-[#E2A23B] mt-[5px] flex-shrink-0" />
+                        <div className="hidden sm:block w-1.5 h-1.5 rounded-full bg-[#E2A23B] mt-[5px] flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                           <div className="text-[13px] font-medium text-[#1E1B16] leading-snug truncate"
                             style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>
                             {ap.eventTitle}
                           </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[9px] text-[#6B6355]" style={M}>{ap.organizerName}</span>
-                            <span className="text-[#DCD4C2] text-xs">·</span>
-                            <span className="text-[9px] text-[#9C8E7E]" style={M}>{ap.department ?? "—"}</span>
+                          <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                            <span className="text-[9px] text-[#6B6355] truncate whitespace-nowrap" style={M}>{ap.organizerName}</span>
+                            <span className="text-[#DCD4C2] text-xs shrink-0">·</span>
+                            <span className="text-[9px] text-[#9C8E7E] truncate whitespace-nowrap" style={M}>{ap.department ?? "—"}</span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="flex items-center gap-2 flex-shrink-0 pl-[18px] sm:pl-0">
                           <span className="text-[8px]" style={{ ...M, color:"#9C8E7E" }}>{formatApprovalAge(ap.submittedAt)}</span>
-                          <span className="text-[8px] px-2 py-0.5 rounded-full border"
+                          <span className="text-[11px] sm:text-[8px] whitespace-nowrap px-2 py-0.5 rounded-full border"
                             style={{ ...M, borderColor:"rgba(226,162,59,0.35)", color:"#8A5C00", background:"rgba(226,162,59,0.08)" }}>
                             {ap.type === "new_event" ? "New event" : ap.type === "recurring" ? "Recurring" : ap.type === "capacity_change" ? "Capacity change" : "Edit"}
                           </span>
@@ -337,23 +337,23 @@ export function AdminDashboard({
                 <CertificateSeal size={80} rotate={-10} delay={0.2} />
               )}
               {pendingCount > 0 && (
-                <div className="flex-shrink-0 flex flex-col gap-2">
+                <div className="flex-shrink-0 flex flex-row items-center gap-3 w-full sm:w-auto sm:flex-col sm:gap-2">
                   <button type="button"
                     onClick={() => onNavigate("admin-approvals")}
                     onMouseEnter={() => setReviewHover(true)}
                     onMouseLeave={() => setReviewHover(false)}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-[6px] text-[12px] font-semibold"
+                    className="flex items-center justify-center gap-2 h-10 sm:h-auto px-4 py-0 sm:py-2.5 rounded-[6px] text-sm sm:text-[12px] font-semibold"
                     style={{
                       background: reviewHover ? "#C8891A" : "#E2A23B",
                       color: "#1E1B16",
                       fontFamily: "'Public Sans', system-ui, sans-serif",
                       transition: "background 150ms ease",
                     }}>
-                    <CheckCircle2 size={13} strokeWidth={2} />
+                    <CheckCircle2 size={18} className="sm:w-[13px] sm:h-[13px]" strokeWidth={2} />
                     Review All
                   </button>
                   <button type="button" onClick={() => toast("Dismissed")}
-                    className="text-[10px] text-center text-[#9C8E7E] hover:text-[#6B6355] transition-colors"
+                    className="flex items-center h-10 px-3 text-sm sm:h-auto sm:px-0 sm:text-[10px] sm:text-center text-[#9C8E7E] hover:text-[#6B6355] transition-colors"
                     style={{ fontFamily:"'Public Sans', system-ui, sans-serif" }}>
                     Dismiss
                   </button>
@@ -363,16 +363,16 @@ export function AdminDashboard({
           </motion.div>
 
           {/* ── Platform metrics strip — count-up on load ── */}
-          <motion.div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
+          <motion.div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 auto-rows-fr"
             initial={{ opacity:0, y:6 }} animate={{ opacity:1, y:0 }}
             transition={{ duration:0.22, ease:"easeOut", delay:0.06 }}>
             {ADMIN_PLATFORM_METRICS.map((m, i) => {
               const isPending = m.label === "Pending Approvals";
               const target = isPending ? pendingCount : parseMetricNum(m.value);
               return (
-                <div key={m.label} className="bg-[#FCFAF3] border border-[#DCD4C2] rounded-[8px] px-4 py-4">
-                  <div className="text-[8px] tracking-widest uppercase text-[#6B6355] mb-2" style={M}>{m.label}</div>
-                  <div className="text-[1.65rem] font-semibold leading-none mb-1.5" style={F}>
+                <div key={m.label} className="bg-[#FCFAF3] border border-[#DCD4C2] rounded-[8px] p-4 flex flex-col">
+                  <div className="text-[11px] sm:text-[8px] tracking-tight sm:tracking-widest uppercase text-[#6B6355] mb-2 truncate" style={M}>{m.label}</div>
+                  <div className="text-3xl sm:text-[1.65rem] font-semibold leading-none mb-1.5" style={F}>
                     <StatMetricNumber
                       target={target}
                       formatted={isPending ? String(target) : m.value}
@@ -381,7 +381,7 @@ export function AdminDashboard({
                       delay={i * 70}
                     />
                   </div>
-                  <div className="text-[9px] text-[#9C8E7E]" style={M}>{m.sub}</div>
+                  <div className="text-xs sm:text-[9px] text-[#9C8E7E] mt-auto" style={M}>{m.sub}</div>
                 </div>
               );
             })}
