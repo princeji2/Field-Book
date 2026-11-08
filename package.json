@@ -7,6 +7,7 @@
     "build": "tsc -b --force && vite build",
     "dev": "vite",
     "typecheck": "tsc -b --force",
+    "test": "vitest --run",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -75,10 +76,12 @@
     "@types/node": "26.2.0",
     "@types/react-dom": "19.2.4",
     "@vitejs/plugin-react": "4.7.0",
+    "fast-check": "3.23.2",
     "tailwindcss": "4.1.12",
     "typescript": "^7.0.2",
     "vite": "6.3.5",
-    "vite-plugin-pwa": "^0.21.2"
+    "vite-plugin-pwa": "^0.21.2",
+    "vitest": "3.2.4"
   },
   "peerDependencies": {
     "react": "18.3.1",

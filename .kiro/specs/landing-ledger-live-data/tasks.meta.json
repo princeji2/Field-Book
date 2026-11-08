@@ -1,0 +1,260 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Write `supabase/migrations/20260908120000_landing_ledger_rpc.sql`": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102002295
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102018412
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102128057
+      }
+    ],
+    "2.1 Create `src/lib/landingLedger.ts` with types, fallback, and parsing": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102002407
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102019832
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102128279
+      }
+    ],
+    "2.2 Add `fetchLandingLedger` to `src/lib/landingLedger.ts`": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102002477
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102134524
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102257119
+      }
+    ],
+    "3.1 Create `src/lib/useLandingLedger.ts`": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102002562
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102268304
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102314679
+      }
+    ],
+    "4.1 Wire live data and loading state": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102002628
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102372919
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102530943
+      }
+    ],
+    "4.2 Apply the responsive grid to the column head and rows": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102002695
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102531398
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102650334
+      }
+    ],
+    "5. Checkpoint - Ensure the code compiles": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102002770
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102650589
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102772367
+      }
+    ],
+    "6.1 Add vitest and fast-check": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102002844
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102134747
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102258096
+      }
+    ],
+    "7. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102002913
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102784223
+      }
+    ],
+    "8.1 Run `tsc` and the Vite production build": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102003014
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102657436
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102772736
+      }
+    ],
+    "9.1 Check the landing page with Playwright MCP": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102003083
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102784664
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794103123492
+      }
+    ],
+    "10.1 Produce the handoff report": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102003144
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794103123579
+      },
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794103133447
+      }
+    ],
+    "1. Create the database migration": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102128166
+      }
+    ],
+    "2. Implement the pure frontend module": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102257216
+      }
+    ],
+    "6. Set up the test tooling": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102258189
+      }
+    ],
+    "3. Implement the hook": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102314811
+      }
+    ],
+    "4. Update `HeroLedger` in `src/app/shared.tsx`": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102650406
+      }
+    ],
+    "8. Build verification": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794102772819
+      }
+    ],
+    "9. Playwright verification": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794103123641
+      }
+    ],
+    "10. Final report": [
+      {
+        "executionId": "c8f4e726-87e2-4af6-8ece-380f6bd26d40",
+        "chatSessionId": "sess_dbf7c468-48ca-46a6-927e-6ab78dd20a2f",
+        "timestamp": 1794103133531
+      }
+    ]
+  }
+}

@@ -10,6 +10,8 @@ import {
   AlertTriangle, RefreshCw,
   Mail,
 } from "lucide-react";
+import { useLandingLedger } from "../lib/useLandingLedger";
+import { formatLedgerDate, formatLedgerTime } from "../lib/landingLedger";
 import { signUpWithProfile, roleToScreen, signOutUser, getCurrentUserProfile, signInWithGoogle, verifySignupOtp, resendSignupOtp, requestPasswordReset, type SignupRole, type AuthedProfile } from "../lib/auth";
 
 // ─── Typography shorthand ───────────────────────────────────────────────────
@@ -490,13 +492,9 @@ export function DemoCert() {
 
 // ─── Hero ledger card ────────────────────────────────────────────────────────
 export function HeroLedger() {
-  const rows = [
-    { name: "Sarah Chen",      id: "SCH-4421", time: "09:02", ok: true  },
-    { name: "Marcus Williams", id: "MWI-3387", time: "09:04", ok: true  },
-    { name: "Priya Patel",     id: "PPA-7702", time: "09:07", ok: true  },
-    { name: "James Rodriguez", id: "JRO-9915", time: "09:11", ok: true  },
-    { name: "Aisha Thompson",  id: "ATH-2246", time: "—",     ok: false },
-  ];
+  const { status, data } = useLandingLedger();
+  const loading = status === "loading";
+  const bar = "bg-[#DCD4C2] rounded-[3px]";
 
   return (
     <div className="bg-[#FCFAF3] border border-[#1E1B16]/18 rounded-[8px] w-full max-w-[308px] overflow-hidden">
@@ -506,51 +504,92 @@ export function HeroLedger() {
           <BookMarked size={11} className="text-[#E2A23B]" strokeWidth={1.75} />
           <span className="text-[9px] font-semibold tracking-widest uppercase" style={M}>Event Ledger</span>
         </div>
-        <span className="text-[8px] text-[#6B6355]" style={M}>#FB-2024-0891</span>
+        {loading ? (
+          <span className={`${bar} block h-2 w-16`} aria-hidden="true" />
+        ) : (
+          <span className="text-[8px] text-[#6B6355]" style={M}>#{data.ledgerId}</span>
+        )}
       </div>
 
       {/* Event info */}
       <div className="px-4 py-3 border-b border-[#DCD4C2]">
-        <div className="text-sm font-semibold text-[#1E1B16] leading-tight mb-1.5" style={F}>
-          Environmental Policy Symposium
-        </div>
-        <div className="flex items-center gap-3 text-[8px] text-[#6B6355]" style={M}>
-          <span className="flex items-center gap-1"><Calendar size={8} />Nov 14, 2024</span>
-          <span className="flex items-center gap-1"><MapPin size={8} />Whitman Hall, Rm 204</span>
-        </div>
+        {loading ? (
+          <div aria-hidden="true">
+            <div className={`${bar} h-3.5 w-48 mb-2`} />
+            <div className="flex items-center gap-3">
+              <span className={`${bar} block h-2 w-16`} />
+              <span className={`${bar} block h-2 w-24`} />
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="text-sm font-semibold text-[#1E1B16] leading-tight mb-1.5" style={F}>
+              {data.title}
+            </div>
+            <div className="flex items-center gap-3 text-[8px] text-[#6B6355]" style={M}>
+              <span className="flex items-center gap-1"><Calendar size={8} />{formatLedgerDate(data.eventDate)}</span>
+              {data.venue && (
+                <span className="flex items-center gap-1"><MapPin size={8} />{data.venue}</span>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Column head */}
-      <div className="px-4 py-1.5 border-b border-[#DCD4C2] grid grid-cols-[1fr,auto,auto] gap-3">
+      <div className="px-4 py-1.5 border-b border-[#DCD4C2] grid grid-cols-1 sm:grid-cols-[1fr_2.25rem_2.25rem] gap-3">
         <span className="text-[8px] tracking-widest text-[#6B6355] uppercase" style={M}>Name</span>
         <span className="text-[8px] text-[#6B6355]" style={M}>Time</span>
         <span className="text-[8px] text-[#6B6355]" style={M}>Status</span>
       </div>
 
       {/* Rows */}
-      {rows.map((row, i) => (
-        <div
-          key={row.id}
-          className={`px-4 py-2 grid grid-cols-[1fr,auto,auto] gap-3 items-center${i < rows.length - 1 ? " border-b border-[#DCD4C2]" : ""}`}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${row.ok ? "bg-[#2E6B4C]" : "bg-[#DCD4C2]"}`} />
-            <div className="min-w-0">
-              <div className="text-[11px] text-[#1E1B16] truncate">{row.name}</div>
-              <div className="text-[8px] text-[#6B6355]" style={M}>{row.id}</div>
-            </div>
-          </div>
-          <span className={`text-[9px] ${row.ok ? "text-[#6B6355]" : "text-[#DCD4C2]"} flex-shrink-0`} style={M}>
-            {row.time}
-          </span>
-          {row.ok ? (
-            <Check size={10} className="text-[#2E6B4C] flex-shrink-0" />
-          ) : (
-            <div className="w-2.5 h-2.5 rounded-full border border-[#DCD4C2] flex-shrink-0" />
-          )}
-        </div>
-      ))}
-
+      {loading
+        ? Array.from({ length: 5 }, (_, i) => (
+            <motion.div
+              key={`sk-${i}`}
+              aria-hidden="true"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, ease: "easeOut", delay: i * 0.07 }}
+              className={`px-4 py-2 grid grid-cols-1 sm:grid-cols-[1fr_2.25rem_2.25rem] gap-3 items-center${i < 4 ? " border-b border-[#DCD4C2]" : ""}`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-[#DCD4C2]" />
+                <div className="min-w-0">
+                  <div className={`${bar} h-2.5 w-24 mb-1`} />
+                  <div className={`${bar} h-2 w-14`} />
+                </div>
+              </div>
+              <span className={`${bar} block h-2 w-8`} />
+              <span className="block w-2.5 h-2.5" />
+            </motion.div>
+          ))
+        : data.rows.map((row, i) => (
+            <motion.div
+              key={`${row.maskedId}-${i}`}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, ease: "easeOut", delay: i * 0.07 }}
+              className={`px-4 py-2 grid grid-cols-1 sm:grid-cols-[1fr_2.25rem_2.25rem] gap-3 items-center${i < data.rows.length - 1 ? " border-b border-[#DCD4C2]" : ""}`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${row.checkedIn ? "bg-[#2E6B4C]" : "bg-[#DCD4C2]"}`} />
+                <div className="min-w-0">
+                  <div className="text-[11px] text-[#1E1B16] truncate">{row.displayName}</div>
+                  <div className="text-[9px] text-[#6B6355]" style={M}>{row.maskedId}</div>
+                </div>
+              </div>
+              <span className={`text-[9px] ${row.checkedIn ? "text-[#6B6355]" : "text-[#DCD4C2]"} flex-shrink-0`} style={M}>
+                {row.checkedIn ? formatLedgerTime(row.checkedInAt) : "—"}
+              </span>
+              {row.checkedIn ? (
+                <Check size={10} className="text-[#2E6B4C] flex-shrink-0" />
+              ) : (
+                <div className="w-2.5 h-2.5 rounded-full border border-[#DCD4C2] flex-shrink-0" />
+              )}
+            </motion.div>
+          ))}
       {/* Footer */}
       <div className="px-4 py-2.5 border-t border-[#DCD4C2] bg-[#F6F1E7] flex items-center justify-between">
         <div className="flex items-center gap-2.5">
@@ -559,7 +598,7 @@ export function HeroLedger() {
           </div>
           <div>
             <div className="text-[7px] text-[#6B6355] uppercase tracking-wider" style={M}>Scan to attend</div>
-            <div className="text-[9px] font-medium text-[#1E1B16]" style={M}>ENV-POL-2024</div>
+            <div className="text-[9px] font-medium text-[#1E1B16]" style={M}>{data.code}</div>
           </div>
         </div>
         <CertificateSeal size={44} rotate={-11} delay={0.8} />
