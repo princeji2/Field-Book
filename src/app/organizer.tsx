@@ -42,7 +42,6 @@ import { Link } from "react-router";
 import {
   Sheet, SheetTrigger, SheetContent, SheetClose, SheetTitle,
 } from "./components/ui/sheet";
-import { AnimatedBackground } from "./components/AnimatedBackground";
 import { InstallButton } from "./components/InstallButton";
 
 // ─── Organizer shell ──────────────────────────────────────────────────────────
@@ -1684,113 +1683,38 @@ export function EventsWorkspaceScreen({ onNavigate, initialView = "list", isGues
   );
 }
 
-// ─── Animated stats row (fires CountUp when scrolled into view) ──────────────
-type StatDef = { target: number; formatted: string; suffix: string; label: string; scale?: number };
-
-/** Counts a decimal value (scaled ×10 internally) and renders with one decimal place. */
-function DecimalCountUp({ target, suffix, color, duration, delay }: {
-  target: number; suffix: string; color: string; duration: number; delay: number;
-}) {
-  const [display, setDisplay] = useState(0);
-  const startRef = useRef<number | null>(null);
-  const rafRef = useRef<number>(0);
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      function tick(ts: number) {
-        if (startRef.current === null) startRef.current = ts;
-        const progress = Math.min((ts - startRef.current) / duration, 1);
-        const eased = 1 - Math.pow(1 - progress, 3);
-        setDisplay(Math.round(eased * target));
-        if (progress < 1) rafRef.current = requestAnimationFrame(tick);
-      }
-      rafRef.current = requestAnimationFrame(tick);
-    }, delay);
-    return () => { clearTimeout(t); cancelAnimationFrame(rafRef.current); };
-  }, [target, duration, delay]);
-
-  const formatted = (display / 10).toFixed(1);
-  return <span style={{ color }}>{formatted}{suffix}</span>;
-}
-
-function StatsRow({ stats, className, valueClassName, labelClassName, itemClassName, accentColor }: {
-  stats: StatDef[];
-  className?: string;
-  valueClassName?: string;
-  labelClassName?: string;
-  itemClassName?: string;
-  accentColor?: string;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [inView, setInView] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setInView(true); observer.disconnect(); } },
-      { threshold: 0.3 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  return (
-    <div ref={ref} className={className}>
-      {stats.map(({ target, formatted, suffix, label, scale }, i) => (
-        <div key={label} className={itemClassName}>
-          <div className={valueClassName} style={F}>
-            {inView ? (
-              scale ? (
-                <DecimalCountUp
-                  target={target}
-                  suffix={suffix}
-                  color="#1E1B16"
-                  duration={600}
-                  delay={i * 100}
-                />
-              ) : (
-                <>
-                  <CountUp
-                    target={target}
-                    formatted={formatted}
-                    suffix=""
-                    color="#1E1B16"
-                    duration={600}
-                    delay={i * 100}
-                  />
-                  {suffix && <span style={{ color: accentColor || "#1E1B16" }}>{suffix}</span>}
-                </>
-              )
-            ) : (
-              <span style={{ color: "#1E1B16" }}>0{suffix && <span style={{ color: accentColor || "#1E1B16" }}>{suffix}</span>}</span>
-            )}
-          </div>
-          <div className={labelClassName}>{label}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ─── Landing page (all existing content, unchanged) ──────────────────────────
 export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void }) {
   const [demoStep, setDemoStep] = useState(0);
 
   const steps = [
-    { num: "01", label: "Create Event",       icon: ClipboardList },
-    { num: "02", label: "Students Scan",       icon: Scan          },
-    { num: "03", label: "Certificate Issued",  icon: Award         },
+    { num: "01", label: "Create event",        icon: ClipboardList },
+    { num: "02", label: "Scan to attend",      icon: Scan          },
+    { num: "03", label: "Receive certificate", icon: Award         },
   ];
+
+  // Arrow-key / Home / End navigation for the process tablist (WAI-ARIA tabs
+  // pattern, automatic activation). Focus follows the newly selected tab.
+  function onStepKeyDown(e: React.KeyboardEvent<HTMLButtonElement>) {
+    const last = steps.length - 1;
+    let next: number | null = null;
+    if (e.key === "ArrowRight") next = demoStep === last ? 0 : demoStep + 1;
+    else if (e.key === "ArrowLeft") next = demoStep === 0 ? last : demoStep - 1;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = last;
+    if (next === null) return;
+    e.preventDefault();
+    setDemoStep(next);
+    document.getElementById(`process-tab-${next}`)?.focus();
+  }
 
   return (
     <div className="bg-[#F6F1E7] text-[#1E1B16] min-h-screen relative" style={dotGrid}>
-      <AnimatedBackground />
 
       {/* ══ Nav ══════════════════════════════════════════════════════════════ */}
       <nav className="sticky top-0 z-50 bg-[#F6F1E7] border-b border-[#1E1B16]/12">
         <div className="max-w-6xl mx-auto px-6 flex items-center justify-between h-14">
-          <Link to="/" className="flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] rounded-[4px]">
+          <Link to="/" className="flex items-center gap-2.5 min-h-[44px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] rounded-[4px]">
             <BookMarked size={16} className="text-[#E2A23B]" strokeWidth={1.75} />
             <span className="text-[#1E1B16] text-base font-semibold tracking-tight" style={F}>Fieldbook</span>
           </Link>
@@ -1826,14 +1750,14 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
                 up. InstallButton self-hides when already installed or not
                 installable. */}
             <div className="sm:hidden">
-              <InstallButton variant="ghost" label="Install Field Book" iconOnly />
+              <InstallButton variant="ghost" label="Install Fieldbook" iconOnly />
             </div>
             <div className="hidden sm:block">
               <InstallButton variant="ghost" />
             </div>
             <button
               onClick={() => onNavigate("admin-login")}
-              className="px-4 py-1.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2 transition-colors"
+              className="inline-flex items-center min-h-[44px] px-4 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2 transition-colors"
             >
               Get Started
             </button>
@@ -1842,13 +1766,13 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
             <Sheet>
               <SheetTrigger asChild>
                 <button
-                  className="md:hidden w-8 h-8 flex items-center justify-center border border-[#DCD4C2] rounded-[5px] hover:border-[#1E1B16]/30 transition-colors"
+                  className="md:hidden w-11 h-11 flex items-center justify-center border border-[#DCD4C2] rounded-[7px] hover:border-[#1E1B16]/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2 transition-colors"
                   aria-label="Open navigation menu"
                 >
                   <Menu size={18} strokeWidth={1.5} className="text-[#1E1B16]" />
                 </button>
               </SheetTrigger>
-              <SheetContent side="right" className="bg-[#F6F1E7] border-l border-[#DCD4C2] p-0">
+              <SheetContent side="right" aria-describedby={undefined} className="bg-[#F6F1E7] border-l border-[#DCD4C2] p-0">
                 <SheetTitle className="sr-only">Navigation menu</SheetTitle>
                 <div className="flex flex-col h-full">
                   {/* Drawer header */}
@@ -1862,7 +1786,7 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
                     <SheetClose asChild>
                       <a
                         href="#features"
-                        className="px-3 py-2.5 text-sm text-[#1E1B16] hover:bg-[#FCFAF3] rounded-[6px] transition-colors"
+                        className="flex items-center min-h-[44px] px-3 text-sm text-[#1E1B16] hover:bg-[#FCFAF3] rounded-[6px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] transition-colors"
                       >
                         Features
                       </a>
@@ -1870,7 +1794,7 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
                     <SheetClose asChild>
                       <Link
                         to="/campuses"
-                        className="px-3 py-2.5 text-sm text-[#1E1B16] hover:bg-[#FCFAF3] rounded-[6px] transition-colors"
+                        className="flex items-center min-h-[44px] px-3 text-sm text-[#1E1B16] hover:bg-[#FCFAF3] rounded-[6px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] transition-colors"
                       >
                         For Campuses
                       </Link>
@@ -1878,7 +1802,7 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
                     <SheetClose asChild>
                       <Link
                         to="/pricing"
-                        className="px-3 py-2.5 text-sm text-[#1E1B16] hover:bg-[#FCFAF3] rounded-[6px] transition-colors"
+                        className="flex items-center min-h-[44px] px-3 text-sm text-[#1E1B16] hover:bg-[#FCFAF3] rounded-[6px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] transition-colors"
                       >
                         Pricing
                       </Link>
@@ -1886,7 +1810,7 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
                     <SheetClose asChild>
                       <button
                         onClick={() => onNavigate("admin-login")}
-                        className="px-3 py-2.5 text-sm text-[#1E1B16] hover:bg-[#FCFAF3] rounded-[6px] transition-colors text-left"
+                        className="flex items-center min-h-[44px] px-3 text-sm text-[#1E1B16] hover:bg-[#FCFAF3] rounded-[6px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] transition-colors text-left"
                       >
                         Sign in
                       </button>
@@ -1914,110 +1838,134 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
       <main>
 
         {/* ══ Hero ══════════════════════════════════════════════════════════ */}
-        <section className="max-w-7xl mx-auto px-6 py-16 lg:py-20 grid grid-cols-1 lg:grid-cols-2 gap-12 xl:gap-20 items-center">
-          <div className="max-w-[500px]">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#FCFAF3] border border-[#DCD4C2] rounded-full mb-8">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#2E6B4C]" />
-              <span className="text-[10px] text-[#6B6355] tracking-widest uppercase" style={M}>Campus Ledger System</span>
-            </div>
-
+        <section className="max-w-[1600px] mx-auto px-3 sm:px-4 lg:px-6 pt-3 sm:pt-4 lg:pt-6 pb-6 lg:pb-10">
+         <div className="bg-[#FCFAF3] border border-[#1E1B16]/20 rounded-[12px] lg:rounded-[16px] overflow-hidden grid grid-cols-1 lg:grid-cols-[45fr_55fr]">
+          <div className="px-6 py-10 sm:px-10 sm:py-14 lg:px-12 xl:px-16 lg:py-20 flex flex-col justify-center">
+           <div className="max-w-[500px]">
             <h1 className="text-4xl sm:text-5xl lg:text-[3.6rem] font-semibold leading-[1.06] tracking-tight text-[#1E1B16] mb-6" style={F}>
               The Official Record<span className="hidden sm:inline"><br /></span>{" "}of Campus<span className="hidden sm:inline"><br /></span>{" "}<em className="text-[#6B6355]">Participation.</em>
             </h1>
 
-            <p className="text-[#6B6355] text-lg leading-relaxed mb-10">
-              Track events, verify attendance, and issue certificates that students carry forward. Built for institutions that take campus life seriously.
+            <p className="text-[#6B6355] text-lg leading-relaxed mb-10 max-w-[46ch] text-pretty">
+              Organizers create an event and show its QR code at the door. Students scan it on arrival, each check-in is saved with a timestamp, and attendees receive a certificate for the event.
             </p>
 
-            <div className="flex items-center gap-4 flex-wrap mb-12">
+            <div className="flex items-center gap-4 flex-wrap">
               <button
+                type="button"
                 onClick={() => onNavigate("admin-login")}
-                className="flex items-center gap-2 px-6 py-3 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors"
+                className="flex items-center gap-3 min-h-[44px] pl-6 pr-1.5 py-1.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2 transition-colors"
               >
-                Get Started <ArrowRight size={14} />
+                Get Started
+                <span className="w-8 h-8 flex items-center justify-center bg-[#1E1B16] text-[#F6F1E7] rounded-[5px]" aria-hidden="true">
+                  <ArrowRight size={14} strokeWidth={1.5} />
+                </span>
               </button>
-              <button className="flex items-center gap-2 px-6 py-3 text-[#1E1B16] text-sm font-medium border border-[#1E1B16]/25 rounded-[7px] hover:border-[#1E1B16]/50 transition-colors">
-                See how it works <ChevronRight size={14} />
-              </button>
+              <a
+                href="#process"
+                className="flex items-center gap-2 min-h-[44px] px-6 py-3 text-[#1E1B16] text-sm font-medium border border-[#1E1B16]/25 rounded-[7px] hover:border-[#1E1B16]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2 transition-colors"
+              >
+                See how it works <ChevronRight size={14} aria-hidden="true" />
+              </a>
             </div>
-
-            <StatsRow
-              stats={[
-                { target: 127, formatted: "127", suffix: "+", label: "Campuses" },
-                { target: 24, formatted: "2.4", suffix: "M", label: "Certificates", scale: 10 },
-                { target: 987, formatted: "98.7", suffix: "%", label: "Accuracy", scale: 10 },
-              ]}
-              className="border-t border-[#DCD4C2] pt-10 flex items-center gap-8"
-              valueClassName="text-xl font-semibold text-[#1E1B16] leading-none mb-1"
-              labelClassName="text-xs text-[#6B6355]"
-            />
+           </div>
           </div>
 
-          <div className="w-full max-w-[520px] mx-auto lg:mx-0 lg:justify-self-end">
-            <HeroLedger />
+          <div className="bg-[#F6F1E7] border-t lg:border-t-0 lg:border-l border-[#DCD4C2] px-4 py-6 sm:px-8 sm:py-10 lg:px-10 xl:px-14 lg:py-16 flex items-center justify-center">
+            <HeroLedger embedded />
           </div>
+         </div>
         </section>
 
         {/* ══ Interactive Demo ══════════════════════════════════════════════ */}
-        <section className="border-t border-[#DCD4C2] bg-[#FCFAF3]">
+        <section id="process" className="border-t border-[#DCD4C2] bg-[#FCFAF3] scroll-mt-14">
           <div className="max-w-6xl mx-auto px-6 py-20">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
               <div>
                 <p className="text-[10px] tracking-widest uppercase text-[#6B6355] mb-2" style={M}>The Process</p>
-                <h2 className="text-3xl font-semibold text-[#1E1B16] leading-snug" style={F}>
-                  QR scan to certificate<br />in under a minute.
+                <h2 id="process-heading" className="text-3xl font-semibold text-[#1E1B16] leading-snug" style={F}>
+                  From QR scan<br />to certificate.
                 </h2>
               </div>
               <p className="text-sm text-[#6B6355] max-w-xs">
-                Select any step to see the live interface. Each transition is automatic — no manual steps for students.
+                Select a step to see that part of the interface. Names and events shown are sample data.
               </p>
             </div>
 
             {/* Step selector tabs */}
-            <div className="flex items-stretch border border-[#DCD4C2] rounded-[8px] overflow-hidden mb-6">
+            <div
+              role="tablist"
+              aria-labelledby="process-heading"
+              className="relative grid grid-cols-3 mb-8"
+            >
+              {/* Connecting line, runs between the first and last node centres */}
+              <div
+                aria-hidden="true"
+                className="absolute top-[34px] left-[16.667%] right-[16.667%] h-px bg-[#DCD4C2]"
+              />
               {steps.map(({ num, label, icon: Icon }, i) => (
                 <button
                   key={num}
+                  type="button"
+                  role="tab"
+                  id={`process-tab-${i}`}
+                  aria-selected={demoStep === i}
+                  aria-controls="process-panel"
+                  tabIndex={demoStep === i ? 0 : -1}
                   onClick={() => setDemoStep(i)}
-                  className={`flex-1 flex items-center gap-3 px-5 py-4 text-left transition-colors duration-200 ${
-                    i < steps.length - 1 ? "border-r border-[#DCD4C2]" : ""
-                  } ${demoStep === i ? "bg-[#1E1B16] text-[#F6F1E7]" : "bg-[#FCFAF3] text-[#6B6355] hover:bg-[#F6F1E7]"}`}
+                  onKeyDown={onStepKeyDown}
+                  className="relative min-h-[44px] flex flex-col items-center gap-3 px-1 sm:px-4 pt-3 pb-3 text-center rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2"
                 >
                   <span
-                    className="text-[10px] font-medium flex-shrink-0"
-                    style={{ ...M, color: demoStep === i ? "#E2A23B" : undefined }}
+                    className={`w-11 h-11 flex items-center justify-center rounded-full border transition-colors duration-200 ${
+                      demoStep === i
+                        ? "bg-[#E2A23B] border-[#1E1B16] text-[#1E1B16]"
+                        : "bg-[#FCFAF3] border-[#DCD4C2] text-[#6B6355]"
+                    }`}
                   >
-                    {num}
+                    <Icon size={18} strokeWidth={1.5} aria-hidden="true" />
                   </span>
-                  <Icon size={14} strokeWidth={1.5} className="flex-shrink-0" />
-                  <span className="text-xs font-medium hidden sm:inline">{label}</span>
+                  <span className="flex flex-col items-center gap-0.5">
+                    <span className="text-[10px] tracking-widest text-[#6B6355]" style={M}>{num}</span>
+                    <span className={`text-xs sm:text-sm leading-snug ${demoStep === i ? "font-semibold text-[#1E1B16]" : "font-medium text-[#6B6355]"}`}>
+                      {label}
+                    </span>
+                  </span>
                 </button>
               ))}
             </div>
 
-            {/* Demo panel */}
-            <div className="bg-[#F6F1E7] border border-[#DCD4C2] rounded-[8px] p-6 min-h-[280px]">
-              <AnimatePresence mode="wait">
-                {demoStep === 0 && <DemoCreate key="create" />}
-                {demoStep === 1 && <DemoScan key="scan" />}
-                {demoStep === 2 && <DemoCert key="cert" />}
-              </AnimatePresence>
-            </div>
+            <div
+              role="tabpanel"
+              id="process-panel"
+              aria-labelledby={`process-tab-${demoStep}`}
+              tabIndex={0}
+              className="rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2"
+            >
+              {/* Demo panel */}
+              <div className="border-t border-[#DCD4C2] pt-8 min-h-[280px]">
+                <AnimatePresence mode="wait">
+                  {demoStep === 0 && <DemoCreate key="create" />}
+                  {demoStep === 1 && <DemoScan key="scan" />}
+                  {demoStep === 2 && <DemoCert key="cert" />}
+                </AnimatePresence>
+              </div>
 
-            {/* Step description */}
-            <p className="mt-5 text-xs text-[#6B6355] leading-relaxed max-w-xl">
-              {[
-                "Organizers register an event and receive a time-locked QR code bound to the venue and session window.",
-                "Students point their camera at the QR on arrival. Each scan is timestamped and anti-spoofing checks run automatically.",
-                "Verified attendance generates a cryptographically signed certificate, permanently registered to the student record.",
-              ][demoStep]}
-            </p>
+              {/* Step description */}
+              <p className="mt-5 text-sm text-[#6B6355] leading-relaxed max-w-xl">
+                {[
+                  "Organizers create an event and receive a QR code that carries the event code.",
+                  "Students scan the code on arrival. Each check-in is saved with a timestamp, once per student per event.",
+                  "Attendees with a recorded check-in receive a certificate rendered from the institution template, with its own certificate code.",
+                ][demoStep]}
+              </p>
+            </div>
           </div>
         </section>
 
-        {/* ══ Roles ════════════════════════════════════════════════════════ */}
-        <section className="border-t border-[#DCD4C2]">
+        {/* ══ Roles (also the "Features" anchor) ════════════════════════════ */}
+        <section id="features" className="border-t border-[#DCD4C2] scroll-mt-14">
           <div className="max-w-6xl mx-auto px-6 py-20">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
               <div>
@@ -2026,47 +1974,60 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1.25fr_1fr] gap-5">
               {[
                 {
                   role: "STUDENT",
                   icon: GraduationCap,
                   title: "Build your campus record.",
-                  desc: "Track every event you attend. Access your full participation history and download certificates whenever you need them.",
-                  features: ["Personal participation ledger","Certificate portfolio","Event discovery feed","QR scan history"],
+                  desc: "Find events, check in with your phone camera and keep every certificate you earn in one place.",
+                  features: ["Explore published events","Check in by scanning the event QR","Your events and attendance history","Your certificates"],
                   dark: false,
                 },
                 {
                   role: "ORGANIZER",
                   icon: ClipboardList,
                   title: "Run events with authority.",
-                  desc: "Create events, generate QR codes, and monitor attendance in real time. Every scan recorded with a timestamp.",
-                  features: ["Event creation & QR generation","Real-time attendance board","Certificate batch issuance","Exportable records"],
+                  desc: "Create an event, show its QR code at the door and see who checked in, with the time of every scan.",
+                  features: ["Event creation, submitted for approval","A QR code for each event","Attendee list for each event","Event analytics and certificates"],
                   dark: true,
                 },
                 {
                   role: "ADMIN",
                   icon: Settings2,
                   title: "Govern participation.",
-                  desc: "Oversight across all events and organizers. Set policies, review certificates, and generate institutional reports.",
-                  features: ["Institution-wide dashboard","Organizer management","Policy configuration","Audit logs & compliance"],
+                  desc: "Approve events before they go live, decide who can organize them and set the certificate templates.",
+                  features: ["Event approvals","User and role-request management","Certificate templates","Institution analytics"],
                   dark: false,
                 },
               ].map(({ role, icon: Icon, title, desc, features, dark }) => (
                 <div
                   key={role}
-                  className={`rounded-[8px] border p-6 ${dark ? "bg-[#1E1B16] border-[#1E1B16]" : "bg-[#FCFAF3] border-[#DCD4C2]"}`}
+                  className={`rounded-[8px] border flex flex-col ${
+                    dark
+                      ? "bg-[#1E1B16] border-[#1E1B16] p-6 lg:p-10 md:order-first lg:order-none md:col-span-2 lg:col-span-1 lg:col-start-1 lg:row-start-1 lg:row-span-2"
+                      : "bg-[#FCFAF3] border-[#DCD4C2] p-6 lg:col-start-2"
+                  } ${role === "ADMIN" ? "lg:row-start-2" : role === "STUDENT" ? "lg:row-start-1" : ""}`}
                 >
-                  <div className="flex items-center justify-between mb-5">
+                  <div className={`flex items-center justify-between ${dark ? "mb-8 lg:mb-auto lg:pb-10" : "mb-5"}`}>
                     <span className="text-[9px] tracking-widest font-medium" style={{ ...M, color: dark ? "#E2A23B" : "#6B6355" }}>{role}</span>
-                    <Icon size={15} strokeWidth={1.5} style={{ color: dark ? "#E2A23B" : "#6B6355" }} />
+                    <Icon size={dark ? 18 : 15} strokeWidth={1.5} aria-hidden="true" style={{ color: dark ? "#E2A23B" : "#6B6355" }} />
                   </div>
-                  <h3 className="text-lg font-semibold mb-2.5 leading-snug" style={{ ...F, color: dark ? "#F6F1E7" : "#1E1B16" }}>{title}</h3>
-                  <p className="text-sm leading-relaxed mb-6" style={{ color: dark ? "#9A9080" : "#6B6355" }}>{desc}</p>
-                  <ul className="space-y-2">
+                  <h3
+                    className={`${dark ? "text-2xl lg:text-4xl mb-4" : "text-lg mb-2.5"} font-semibold leading-snug`}
+                    style={{ ...F, color: dark ? "#F6F1E7" : "#1E1B16" }}
+                  >
+                    {title}
+                  </h3>
+                  <p className={`leading-relaxed mb-6 ${dark ? "text-base max-w-[44ch] lg:mb-8" : "text-sm"}`} style={{ color: dark ? "#9A9080" : "#6B6355" }}>{desc}</p>
+                  <ul className={`flex flex-wrap gap-2 ${dark ? "" : "mt-auto"}`} aria-label={`${role.charAt(0)}${role.slice(1).toLowerCase()} capabilities`}>
                     {features.map((f) => (
-                      <li key={f} className="flex items-center gap-2.5 text-sm" style={{ color: dark ? "#DCD4C2" : "#1E1B16" }}>
-                        <Check size={11} style={{ color: dark ? "#E2A23B" : "#2E6B4C", flexShrink: 0 }} />
+                      <li
+                        key={f}
+                        className={`px-3.5 py-1.5 rounded-full border text-[13px] leading-snug ${
+                          dark ? "border-[#F6F1E7]/25 text-[#DCD4C2]" : "border-[#DCD4C2] bg-[#F6F1E7] text-[#1E1B16]"
+                        }`}
+                      >
                         {f}
                       </li>
                     ))}
@@ -2077,81 +2038,64 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
           </div>
         </section>
 
-        {/* ══ Features Grid ════════════════════════════════════════════════ */}
-        <section id="features" className="border-t border-[#DCD4C2] bg-[#FCFAF3]">
-          <div className="max-w-6xl mx-auto px-6 py-20">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
-              <div>
-                <p className="text-[10px] tracking-widest uppercase text-[#6B6355] mb-2" style={M}>Platform</p>
-                <h2 className="text-3xl font-semibold text-[#1E1B16] leading-snug" style={F}>Everything the<br />ledger needs.</h2>
+        {/* ══ CTA ══════════════════════════════════════════════════════════ */}
+        <section className="border-t border-[#DCD4C2]">
+         <div className="max-w-[1600px] mx-auto px-3 sm:px-4 lg:px-6 py-6 sm:py-8 lg:py-12">
+          <div className="bg-[#FCFAF3] border border-[#1E1B16]/20 rounded-[12px] lg:rounded-[16px] overflow-hidden grid grid-cols-1 lg:grid-cols-[45fr_55fr]">
+            <div className="px-6 py-10 sm:px-10 sm:py-14 lg:px-12 xl:px-16 lg:py-20 flex flex-col justify-center">
+              <div className="max-w-[460px]">
+                <h2 className="text-4xl font-semibold text-[#1E1B16] mb-5 leading-[1.1]" style={F}>
+                  Start your campus<br /><em className="text-[#6B6355]">participation record.</em>
+                </h2>
+                <p className="text-[#6B6355] mb-10 leading-relaxed text-pretty">
+                  Create your first event, show its QR code at the door, and issue certificates to the students who checked in.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onNavigate("admin-login")}
+                  className="flex items-center gap-3 min-h-[44px] pl-6 pr-1.5 py-1.5 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] focus-visible:ring-offset-2 transition-colors"
+                >
+                  Get Started
+                  <span className="w-8 h-8 flex items-center justify-center bg-[#1E1B16] text-[#F6F1E7] rounded-[5px]" aria-hidden="true">
+                    <ArrowRight size={14} strokeWidth={1.5} />
+                  </span>
+                </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-[#DCD4C2] border border-[#DCD4C2] rounded-[8px] overflow-hidden">
-              {[
-                { icon: QrCode,    title: "QR Attendance",      tag: "CORE",       desc: "Unique per-event QR codes. Scans timestamped and logged instantly. Anti-spoofing and time-window enforcement built in to every session." },
-                { icon: Award,     title: "Digital Certificates", tag: "CORE",     desc: "Verifiable credentials generated at event close. Carry your institution's seal, cryptographic signature, and a permanent public verification link." },
-                { icon: BarChart3, title: "Analytics",           tag: "INSIGHT",   desc: "Engagement reports, participation trends, and cohort analysis. Identify your most active departments and the events that drive engagement." },
-                { icon: Compass,   title: "Discovery",           tag: "ENGAGEMENT", desc: "Students browse a curated feed of upcoming events. Follow departments, receive invitations, and plan the semester ahead." },
-              ].map(({ icon: Icon, title, tag, desc }) => (
-                <div key={title} className="bg-[#FCFAF3] p-8 group hover:bg-[#F6F1E7] transition-colors duration-200">
-                  <div className="flex items-start justify-between mb-5">
-                    <div className="w-10 h-10 border border-[#DCD4C2] rounded-[6px] flex items-center justify-center group-hover:border-[#1E1B16]/30 transition-colors">
-                      <Icon size={17} strokeWidth={1.5} className="text-[#6B6355] group-hover:text-[#1E1B16] transition-colors" />
-                    </div>
-                    <span className="text-[9px] tracking-widest text-[#6B6355]" style={M}>{tag}</span>
+            {/* Certificate composition: the template fields a certificate carries,
+                shown as an unfilled sheet (no sample person or event). */}
+            <div className="bg-[#F6F1E7] border-t lg:border-t-0 lg:border-l border-[#DCD4C2] px-4 py-8 sm:px-8 sm:py-12 lg:px-10 xl:px-14 lg:py-16 flex flex-col gap-4 items-center justify-center">
+              <div className="bg-[#FCFAF3] border border-[#1E1B16]/20 rounded-[8px] w-full max-w-[520px] overflow-hidden" role="img" aria-label="Certificate of Participation layout: student name, event, date and certificate code, with the Fieldbook seal.">
+                <div className="h-[3px] bg-[#E2A23B]" />
+                <div className="px-6 sm:px-8 py-5 border-b border-[#DCD4C2] text-center">
+                  <div className="flex items-center justify-center gap-1.5 mb-0.5">
+                    <BookMarked size={12} className="text-[#E2A23B]" strokeWidth={1.75} aria-hidden="true" />
+                    <span className="text-[10px] font-semibold tracking-widest uppercase" style={M}>Fieldbook</span>
                   </div>
-                  <h3 className="text-xl font-semibold text-[#1E1B16] mb-2" style={F}>{title}</h3>
-                  <p className="text-sm text-[#6B6355] leading-relaxed">{desc}</p>
+                  <p className="text-[10px] text-[#6B6355] tracking-widest uppercase" style={M}>Certificate of Participation</p>
                 </div>
-              ))}
+                <div className="px-6 sm:px-8 pt-7 pb-6">
+                  <p className="text-[10px] text-[#6B6355] tracking-widest uppercase mb-2" style={M}>This certifies that</p>
+                  <p className="text-2xl sm:text-3xl font-semibold italic text-[#6B6355] pb-2 border-b border-dashed border-[#1E1B16]/35 mb-1.5" style={F}>Student name</p>
+                  <p className="text-[10px] text-[#6B6355] tracking-widest uppercase mb-6" style={M}>Has attended</p>
+                  <p className="text-base font-semibold italic text-[#6B6355] pb-1.5 border-b border-dashed border-[#1E1B16]/35 w-[85%]" style={F}>Event title</p>
+                  <p className="text-[11px] italic text-[#6B6355] mt-3 pb-1 border-b border-dashed border-[#1E1B16]/35 w-[45%]" style={M}>Event date</p>
+                </div>
+                <div className="px-6 sm:px-8 pb-6 flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] text-[#6B6355] tracking-widest uppercase mb-1" style={M}>Certificate code</p>
+                    <p className="text-[11px] italic text-[#6B6355] pb-1 border-b border-dashed border-[#1E1B16]/35 w-36" style={M}>Unique per attendee</p>
+                  </div>
+                  <CertificateSeal size={80} rotate={-8} delay={0.3} />
+                </div>
+              </div>
+              <p className="text-[11px] tracking-widest uppercase text-[#6B6355] text-center" style={M}>
+                Template fields · filled in for each attendee
+              </p>
             </div>
           </div>
-        </section>
-
-        {/* ══ Stats ════════════════════════════════════════════════════════ */}
-        <section className="border-t border-[#DCD4C2]">
-          <div className="max-w-6xl mx-auto px-6 py-20">
-            <StatsRow
-              stats={[
-                { target: 127, formatted: "127", suffix: "+", label: "Partner Campuses" },
-                { target: 24, formatted: "2.4", suffix: "M", label: "Certificates Issued", scale: 10 },
-                { target: 987, formatted: "98.7", suffix: "%", label: "Verification Accuracy", scale: 10 },
-                { target: 48, formatted: "48", suffix: "", label: "Countries" },
-              ]}
-              className="grid grid-cols-2 md:grid-cols-4 gap-10"
-              valueClassName="text-4xl font-light text-[#1E1B16] leading-none mb-2"
-              labelClassName="text-xs text-[#6B6355]"
-              itemClassName="border-l-2 border-[#E2A23B] pl-5"
-              accentColor="#E2A23B"
-            />
-          </div>
-        </section>
-
-        {/* ══ CTA ══════════════════════════════════════════════════════════ */}
-        <section className="border-t border-[#DCD4C2] bg-[#FCFAF3]">
-          <div className="max-w-xl mx-auto px-6 py-28 text-center">
-            <div className="flex justify-center mb-8">
-              <CertificateSeal size={80} rotate={-7} delay={0} idle />
-            </div>
-            <h2 className="text-4xl font-semibold text-[#1E1B16] mb-5 leading-[1.1]" style={F}>
-              Ready to formalize<br /><em className="text-[#6B6355]">campus participation?</em>
-            </h2>
-            <p className="text-[#6B6355] mb-10 leading-relaxed">
-              Join 127 institutions building a verifiable record of student engagement. Setup takes under a day.
-            </p>
-            <div className="flex items-center justify-center gap-4 flex-wrap">
-              <button
-                onClick={() => onNavigate("admin-login")}
-                className="flex items-center gap-2 px-7 py-3 bg-[#E2A23B] text-[#1E1B16] text-sm font-semibold rounded-[7px] border border-[#1E1B16]/15 hover:bg-[#CC8F28] transition-colors"
-              >
-                {"Get Started — it's free"} <ArrowRight size={14} />
-              </button>
-              <button className="px-7 py-3 text-sm font-medium text-[#1E1B16] border border-[#1E1B16]/25 rounded-[7px] hover:border-[#1E1B16]/50 transition-colors">
-                Request a Demo
-              </button>
-            </div>
-          </div>
+         </div>
         </section>
 
       </main>
@@ -2165,34 +2109,44 @@ export function LandingPage({ onNavigate }: { onNavigate: (s: Screen) => void })
                 <BookMarked size={14} className="text-[#E2A23B]" strokeWidth={1.75} />
                 <span className="font-semibold text-[#1E1B16]" style={F}>Fieldbook</span>
               </div>
-              <p className="text-xs text-[#6B6355] leading-relaxed max-w-[180px]">
-                The official campus participation ledger for institutions that take student engagement seriously.
+              <p className="text-xs text-[#6B6355] leading-relaxed max-w-[200px]">
+                Attendance and certificates for campus events.
               </p>
             </div>
             {[
-              { h: "Product",      ls: ["Features","Certificates","Analytics","Discovery"] },
-              { h: "Institutions", ls: ["Student Portal","Organizer Tools","Admin Dashboard","Integrations"] },
-              { h: "Company",      ls: ["About","Blog","Careers","Contact"] },
+              { h: "Product", ls: [
+                { label: "Features",     href: "#features" },
+                { label: "How it works", href: "#process" },
+                { label: "Pricing",      to: "/pricing" },
+                { label: "For Campuses", to: "/campuses" },
+              ] },
+              { h: "Account", ls: [
+                { label: "Sign in",        to: "/login" },
+                { label: "Create account", to: "/signup" },
+              ] },
+              { h: "Contact", ls: [
+                { label: "Email us", href: "mailto:princenaruka.business@gmail.com?subject=Fieldbook" },
+              ] },
             ].map(({ h, ls }) => (
               <div key={h}>
-                <h4 className="text-[9px] font-semibold text-[#1E1B16] mb-3 tracking-widest uppercase" style={M}>{h}</h4>
-                <ul className="space-y-2">
-                  {ls.map((l) => (
-                    <li key={l}>
-                      <a href="#" className="text-xs text-[#6B6355] hover:text-[#1E1B16] transition-colors">{l}</a>
-                    </li>
-                  ))}
+                <h2 className="text-[10px] font-semibold text-[#1E1B16] mb-2 tracking-widest uppercase" style={M}>{h}</h2>
+                <ul>
+                  {ls.map((l) => {
+                    const cls = "inline-flex items-center min-h-[44px] md:min-h-[32px] text-xs text-[#6B6355] hover:text-[#1E1B16] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E2A23B] rounded-[4px] transition-colors";
+                    return (
+                      <li key={l.label}>
+                        {"to" in l && l.to
+                          ? <Link to={l.to} className={cls}>{l.label}</Link>
+                          : <a href={l.href} className={cls}>{l.label}</a>}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}
           </div>
-          <div className="border-t border-[#DCD4C2] pt-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-            <p className="text-[9px] text-[#6B6355]" style={M}>© 2024 Fieldbook Systems, Inc. All rights reserved.</p>
-            <div className="flex items-center gap-5">
-              {["Privacy","Terms","Security"].map((l) => (
-                <a key={l} href="#" className="text-[9px] text-[#6B6355] hover:text-[#1E1B16] transition-colors" style={M}>{l}</a>
-              ))}
-            </div>
+          <div className="border-t border-[#DCD4C2] pt-6">
+            <p className="text-[10px] text-[#6B6355]" style={M}>© {new Date().getFullYear()} Fieldbook</p>
           </div>
         </div>
       </footer>

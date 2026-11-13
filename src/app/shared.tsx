@@ -293,7 +293,7 @@ export function DemoCreate() {
       {/* Form card */}
       <div className="flex-1 bg-[#FCFAF3] border border-[#DCD4C2] rounded-[7px] p-5">
         <div className="flex items-center justify-between mb-5">
-          <span className="text-[9px] tracking-widest text-[#6B6355] uppercase" style={M}>New Event</span>
+          <span className="text-[11px] tracking-widest text-[#6B6355] uppercase" style={M}>New Event</span>
           <ClipboardList size={13} className="text-[#6B6355]" strokeWidth={1.5} />
         </div>
         <div className="space-y-3 mb-5">
@@ -304,7 +304,7 @@ export function DemoCreate() {
             { label: "ORGANIZER", val: "Prof. Andrei Volkov",             font: undefined },
           ].map(({ label, val, font }) => (
             <div key={label}>
-              <div className="text-[8px] text-[#6B6355] tracking-widest uppercase mb-1.5" style={M}>{label}</div>
+              <div className="text-[10px] text-[#6B6355] tracking-widest uppercase mb-1.5" style={M}>{label}</div>
               <div
                 className="border border-[#DCD4C2] rounded-[5px] px-3 py-2 text-xs text-[#1E1B16]"
                 style={font}
@@ -315,21 +315,21 @@ export function DemoCreate() {
           ))}
         </div>
         <div className="border-t border-[#DCD4C2] pt-4 flex items-center justify-between">
-          <div className="text-[9px] text-[#6B6355]" style={M}>Max Capacity: 120</div>
-          <div className="text-[9px] text-[#2E6B4C]" style={M}>● Certificates Enabled</div>
+          <div className="text-[11px] text-[#6B6355]" style={M}>Max Capacity: 120</div>
+          <div className="text-[11px] text-[#2E6B4C]" style={M}>● Certificates Enabled</div>
         </div>
       </div>
 
       {/* Generated QR card */}
       <div className="flex-shrink-0 bg-[#FCFAF3] border border-[#DCD4C2] rounded-[7px] p-5 flex flex-col items-center justify-between gap-4 w-full md:w-auto md:min-w-[160px]">
-        <div className="text-[9px] tracking-widest text-[#6B6355] uppercase w-full" style={M}>Generated QR</div>
+        <div className="text-[11px] tracking-widest text-[#6B6355] uppercase w-full" style={M}>Generated QR</div>
         <div className="p-2.5 border border-[#DCD4C2] rounded-[6px] bg-white">
           <MockQR size={100} />
         </div>
         <div className="w-full text-center">
           <div className="text-[10px] font-medium text-[#1E1B16] mb-0.5" style={M}>ENV-POL-2024</div>
-          <div className="inline-flex items-center gap-1 text-[8px] text-[#2E6B4C]" style={M}>
-            <span className="w-1 h-1 rounded-full bg-[#2E6B4C]" /> Active · Time-locked
+          <div className="inline-flex items-center gap-1 text-[10px] text-[#2E6B4C]" style={M}>
+            <span className="w-1 h-1 rounded-full bg-[#2E6B4C]" /> Active
           </div>
         </div>
       </div>
@@ -360,7 +360,7 @@ export function DemoScan() {
     >
       {/* QR + scan line */}
       <div className="flex-shrink-0 bg-[#FCFAF3] border border-[#DCD4C2] rounded-[7px] p-5 flex flex-col items-center gap-4 w-full md:w-auto md:min-w-[160px]">
-        <div className="text-[9px] tracking-widest text-[#6B6355] uppercase w-full" style={M}>Scan to Attend</div>
+        <div className="text-[11px] tracking-widest text-[#6B6355] uppercase w-full" style={M}>Scan to Attend</div>
         <div className="relative p-2.5 border border-[#DCD4C2] rounded-[6px] bg-white overflow-hidden">
           <MockQR size={100} />
           <motion.div
@@ -372,15 +372,15 @@ export function DemoScan() {
         </div>
         <div className="w-full text-center">
           <div className="text-[10px] font-medium text-[#1E1B16] mb-0.5" style={M}>ENV-POL-2024</div>
-          <div className="text-[8px] text-[#6B6355]" style={M}>Point camera to QR code</div>
+          <div className="text-[10px] text-[#6B6355]" style={M}>Point camera to QR code</div>
         </div>
       </div>
 
       {/* Live attendance list */}
       <div className="flex-1 bg-[#FCFAF3] border border-[#DCD4C2] rounded-[7px] overflow-hidden">
         <div className="px-4 py-2.5 border-b border-[#DCD4C2] flex items-center justify-between">
-          <span className="text-[9px] tracking-widest text-[#6B6355] uppercase" style={M}>Live Attendance</span>
-          <span className="text-[9px] text-[#2E6B4C]" style={M}>{count} / 4 Verified</span>
+          <span className="text-[11px] tracking-widest text-[#6B6355] uppercase" style={M}>Live Attendance</span>
+          <span className="text-[11px] text-[#2E6B4C]" style={M}>{count} / 4 checked in</span>
         </div>
 
         {SCAN_ROWS.slice(0, count).map((row) => (
@@ -395,11 +395,11 @@ export function DemoScan() {
               <span className="w-1.5 h-1.5 rounded-full bg-[#2E6B4C] flex-shrink-0" />
               <div>
                 <div className="text-xs text-[#1E1B16]">{row.name}</div>
-                <div className="text-[9px] text-[#6B6355]" style={M}>{row.id}</div>
+                <div className="text-[11px] text-[#6B6355]" style={M}>{row.id}</div>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[9px] text-[#6B6355]" style={M}>{row.time}</span>
+              <span className="text-[11px] text-[#6B6355]" style={M}>{row.time}</span>
               <Check size={10} className="text-[#2E6B4C]" />
             </div>
           </motion.div>
@@ -407,19 +407,15 @@ export function DemoScan() {
 
         {count < SCAN_ROWS.length && (
           <div className="px-4 py-3 flex items-center gap-2.5">
-            <motion.span
-              className="w-1.5 h-1.5 rounded-full bg-[#DCD4C2]"
-              animate={{ opacity: [1, 0.3, 1] }}
-              transition={{ duration: 1.2, repeat: Infinity }}
-            />
-            <span className="text-[9px] text-[#DCD4C2]" style={M}>Waiting for next scan…</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-[#DCD4C2]" aria-hidden="true" />
+            <span className="text-[11px] text-[#6B6355]" style={M}>Waiting for next scan…</span>
           </div>
         )}
 
         {count === SCAN_ROWS.length && (
           <div className="px-4 py-3 flex items-center gap-2 border-t border-[#DCD4C2]">
             <Shield size={11} className="text-[#2E6B4C]" strokeWidth={1.5} />
-            <span className="text-[9px] text-[#2E6B4C]" style={M}>All scans verified — certificates queued</span>
+            <span className="text-[11px] text-[#2E6B4C]" style={M}>Each check-in is recorded.</span>
           </div>
         )}
       </div>
@@ -445,22 +441,22 @@ export function DemoCert() {
             <BookMarked size={11} className="text-[#E2A23B]" />
             <span className="text-[10px] font-semibold tracking-widest uppercase" style={M}>Fieldbook</span>
           </div>
-          <p className="text-[8px] text-[#6B6355] tracking-widest uppercase" style={M}>
+          <p className="text-[10px] text-[#6B6355] tracking-widest uppercase" style={M}>
             Certificate of Participation
           </p>
         </div>
 
-        <div className="px-8 py-7 border-b border-[#DCD4C2] grid grid-cols-[1fr,auto] gap-6 items-center">
+        <div className="px-8 py-7 border-b border-[#DCD4C2] grid grid-cols-[1fr_auto] gap-6 items-center">
           <div>
-            <p className="text-[8px] text-[#6B6355] tracking-widest uppercase mb-2" style={M}>
+            <p className="text-[10px] text-[#6B6355] tracking-widest uppercase mb-2" style={M}>
               This Certifies That
             </p>
             <h2 className="text-3xl font-semibold text-[#1E1B16] mb-0.5" style={F}>
               Sarah Chen
             </h2>
-            <p className="text-[9px] text-[#6B6355] mb-6" style={M}>Student ID: SCH-4421</p>
+            <p className="text-[11px] text-[#6B6355] mb-6" style={M}>Student ID: SCH-4421</p>
 
-            <p className="text-[8px] text-[#6B6355] tracking-widest uppercase mb-1.5" style={M}>
+            <p className="text-[10px] text-[#6B6355] tracking-widest uppercase mb-1.5" style={M}>
               Has Attended
             </p>
             <p className="text-base font-semibold text-[#1E1B16] mb-0.5" style={F}>
@@ -474,14 +470,14 @@ export function DemoCert() {
         <div className="px-8 py-4 flex items-end justify-between">
           <div>
             <div className="w-24 border-b border-[#1E1B16]/25 mb-1.5" />
-            <p className="text-[8px] text-[#6B6355] tracking-wide" style={M}>DR. HELENA MARSH</p>
-            <p className="text-[7px] text-[#6B6355]" style={M}>DEAN OF STUDENT AFFAIRS</p>
+            <p className="text-[10px] text-[#6B6355] tracking-wide" style={M}>DR. HELENA MARSH</p>
+            <p className="text-[10px] text-[#6B6355]" style={M}>DEAN OF STUDENT AFFAIRS</p>
           </div>
           <div className="text-right">
-            <p className="text-[7px] text-[#6B6355] mb-0.5" style={M}>CERT-FB-2024-089142</p>
+            <p className="text-[10px] text-[#6B6355] mb-0.5" style={M}>CERT-FB-2024-089142</p>
             <div className="inline-flex items-center gap-1 px-2 py-0.5 border border-[#2E6B4C] rounded-full">
               <span className="w-1 h-1 rounded-full bg-[#2E6B4C]" />
-              <span className="text-[7px] text-[#2E6B4C]" style={M}>Verified</span>
+              <span className="text-[10px] text-[#2E6B4C]" style={M}>Verified</span>
             </div>
           </div>
         </div>
@@ -491,45 +487,48 @@ export function DemoCert() {
 }
 
 // ─── Hero ledger card ────────────────────────────────────────────────────────
-export function HeroLedger() {
+export function HeroLedger({ embedded = false }: { embedded?: boolean } = {}) {
   const { status, data } = useLandingLedger();
   const loading = status === "loading";
   const bar = "bg-[#DCD4C2] rounded-[3px]";
 
   return (
-    <div className="bg-[#FCFAF3] border border-[#1E1B16]/18 rounded-[8px] w-full max-w-[308px] overflow-hidden">
+    <div
+      className={`bg-[#FCFAF3] border border-[#1E1B16]/18 rounded-[8px] w-full overflow-hidden${embedded ? " max-w-[600px]" : ""}`}
+      aria-busy={loading}
+    >
       {/* Header */}
-      <div className="px-4 py-2.5 border-b border-[#DCD4C2] flex items-center justify-between">
+      <div className="px-5 py-3 border-b border-[#DCD4C2] flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <BookMarked size={11} className="text-[#E2A23B]" strokeWidth={1.75} />
-          <span className="text-[9px] font-semibold tracking-widest uppercase" style={M}>Event Ledger</span>
+          <BookMarked size={13} className="text-[#E2A23B]" strokeWidth={1.75} aria-hidden="true" />
+          <span className="text-[10px] font-semibold tracking-widest uppercase" style={M}>Event Ledger</span>
         </div>
         {loading ? (
-          <span className={`${bar} block h-2 w-16`} aria-hidden="true" />
+          <span className={`${bar} block h-2.5 w-24`} aria-hidden="true" />
         ) : (
-          <span className="text-[8px] text-[#6B6355]" style={M}>#{data.ledgerId}</span>
+          <span className="text-[11px] text-[#6B6355]" style={M}>#{data.ledgerId}</span>
         )}
       </div>
 
       {/* Event info */}
-      <div className="px-4 py-3 border-b border-[#DCD4C2]">
+      <div className="px-5 py-4 border-b border-[#DCD4C2]">
         {loading ? (
           <div aria-hidden="true">
-            <div className={`${bar} h-3.5 w-48 mb-2`} />
+            <div className={`${bar} h-5 w-56 mb-2.5`} />
             <div className="flex items-center gap-3">
-              <span className={`${bar} block h-2 w-16`} />
-              <span className={`${bar} block h-2 w-24`} />
+              <span className={`${bar} block h-2.5 w-20`} />
+              <span className={`${bar} block h-2.5 w-28`} />
             </div>
           </div>
         ) : (
           <>
-            <div className="text-sm font-semibold text-[#1E1B16] leading-tight mb-1.5" style={F}>
+            <h2 className="text-lg font-semibold text-[#1E1B16] leading-snug mb-1.5" style={F}>
               {data.title}
-            </div>
-            <div className="flex items-center gap-3 text-[8px] text-[#6B6355]" style={M}>
-              <span className="flex items-center gap-1"><Calendar size={8} />{formatLedgerDate(data.eventDate)}</span>
+            </h2>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#6B6355]" style={M}>
+              <span className="flex items-center gap-1.5"><Calendar size={11} aria-hidden="true" />{formatLedgerDate(data.eventDate)}</span>
               {data.venue && (
-                <span className="flex items-center gap-1"><MapPin size={8} />{data.venue}</span>
+                <span className="flex items-center gap-1.5"><MapPin size={11} aria-hidden="true" />{data.venue}</span>
               )}
             </div>
           </>
@@ -537,10 +536,10 @@ export function HeroLedger() {
       </div>
 
       {/* Column head */}
-      <div className="px-4 py-1.5 border-b border-[#DCD4C2] grid grid-cols-1 sm:grid-cols-[1fr_2.25rem_2.25rem] gap-3">
-        <span className="text-[8px] tracking-widest text-[#6B6355] uppercase" style={M}>Name</span>
-        <span className="text-[8px] text-[#6B6355]" style={M}>Time</span>
-        <span className="text-[8px] text-[#6B6355]" style={M}>Status</span>
+      <div className="px-5 py-2 border-b border-[#DCD4C2] grid grid-cols-1 sm:grid-cols-[1fr_3.25rem_3rem] gap-3" aria-hidden="true">
+        <span className="text-[10px] tracking-widest text-[#6B6355] uppercase" style={M}>Name</span>
+        <span className="text-[10px] tracking-widest text-[#6B6355] uppercase" style={M}>Time</span>
+        <span className="text-[10px] tracking-widest text-[#6B6355] uppercase" style={M}>Status</span>
       </div>
 
       {/* Rows */}
@@ -552,17 +551,17 @@ export function HeroLedger() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, ease: "easeOut", delay: i * 0.07 }}
-              className={`px-4 py-2 grid grid-cols-1 sm:grid-cols-[1fr_2.25rem_2.25rem] gap-3 items-center${i < 4 ? " border-b border-[#DCD4C2]" : ""}`}
+              className={`px-5 py-2.5 grid grid-cols-1 sm:grid-cols-[1fr_3.25rem_3rem] gap-3 items-center${i < 4 ? " border-b border-[#DCD4C2]" : ""}`}
             >
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-[#DCD4C2]" />
                 <div className="min-w-0">
-                  <div className={`${bar} h-2.5 w-24 mb-1`} />
-                  <div className={`${bar} h-2 w-14`} />
+                  <div className={`${bar} h-3 w-28 mb-1.5`} />
+                  <div className={`${bar} h-2.5 w-16`} />
                 </div>
               </div>
-              <span className={`${bar} block h-2 w-8`} />
-              <span className="block w-2.5 h-2.5" />
+              <span className={`${bar} block h-2.5 w-10`} />
+              <span className="block w-3 h-3" />
             </motion.div>
           ))
         : data.rows.map((row, i) => (
@@ -571,22 +570,28 @@ export function HeroLedger() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, ease: "easeOut", delay: i * 0.07 }}
-              className={`px-4 py-2 grid grid-cols-1 sm:grid-cols-[1fr_2.25rem_2.25rem] gap-3 items-center${i < data.rows.length - 1 ? " border-b border-[#DCD4C2]" : ""}`}
+              className={`px-5 py-2.5 grid grid-cols-1 sm:grid-cols-[1fr_3.25rem_3rem] gap-3 items-center${i < data.rows.length - 1 ? " border-b border-[#DCD4C2]" : ""}`}
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${row.checkedIn ? "bg-[#2E6B4C]" : "bg-[#DCD4C2]"}`} />
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${row.checkedIn ? "bg-[#2E6B4C]" : "bg-[#DCD4C2]"}`} aria-hidden="true" />
                 <div className="min-w-0">
-                  <div className="text-[11px] text-[#1E1B16] truncate">{row.displayName}</div>
-                  <div className="text-[9px] text-[#6B6355]" style={M}>{row.maskedId}</div>
+                  <div className="text-[13px] text-[#1E1B16] truncate">{row.displayName}</div>
+                  <div className="text-[11px] text-[#6B6355]" style={M}>{row.maskedId}</div>
                 </div>
               </div>
-              <span className={`text-[9px] ${row.checkedIn ? "text-[#6B6355]" : "text-[#DCD4C2]"} flex-shrink-0`} style={M}>
-                {row.checkedIn ? formatLedgerTime(row.checkedInAt) : "—"}
+              <span className="text-[12px] text-[#6B6355] flex-shrink-0" style={M}>
+                {row.checkedIn ? formatLedgerTime(row.checkedInAt) : <span aria-hidden="true">—</span>}
               </span>
               {row.checkedIn ? (
-                <Check size={10} className="text-[#2E6B4C] flex-shrink-0" />
+                <span className="flex items-center">
+                  <Check size={13} className="text-[#2E6B4C] flex-shrink-0" aria-hidden="true" />
+                  <span className="sr-only">Checked in</span>
+                </span>
               ) : (
-                <div className="w-2.5 h-2.5 rounded-full border border-[#DCD4C2] flex-shrink-0" />
+                <span className="flex items-center">
+                  <span className="w-3 h-3 rounded-full border border-[#6B6355]/50 flex-shrink-0" aria-hidden="true" />
+                  <span className="sr-only">Not checked in</span>
+                </span>
               )}
             </motion.div>
           ))}
@@ -597,8 +602,10 @@ export function HeroLedger() {
             <QrCode size={24} className="text-[#1E1B16]" strokeWidth={1.25} />
           </div>
           <div>
-            <div className="text-[7px] text-[#6B6355] uppercase tracking-wider" style={M}>Scan to attend</div>
-            <div className="text-[9px] font-medium text-[#1E1B16]" style={M}>{data.code}</div>
+            <div className="text-[10px] text-[#6B6355] uppercase tracking-wider" style={M}>Scan to attend</div>
+            {/* The live ledger no longer carries the attendance code (it is a
+                credential); only the sample fallback shows one. */}
+            {data.code && <div className="text-[12px] font-medium text-[#1E1B16]" style={M}>{data.code}</div>}
           </div>
         </div>
         <CertificateSeal size={44} rotate={-11} delay={0.8} />
@@ -886,7 +893,8 @@ export function SignupPage({ onNavigate, onAuthenticated }: { onNavigate: (s: Sc
     const freshProfile = await getCurrentUserProfile();
     if (freshProfile) onAuthenticated?.(freshProfile);
 
-    setConfirmedRole(role);
+    // Every new account is a student (handle_new_user); the picker is not a grant.
+    setConfirmedRole("student");
     setPhase("success");
   }
 

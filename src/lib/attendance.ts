@@ -14,33 +14,55 @@ export type RecordAttendanceResult =
   | { status: "duplicate"; message: string }
   | { status: "error"; message: string };
 
+// Shape returned by the record_attendance RPC
+// (supabase/migrations/20260909120000_secure_attendance_rpc.sql).
+interface RecordAttendanceRpcResult {
+  status: "success" | "duplicate" | "rejected";
+  reason?: "invalid_code" | "event_not_open" | "event_ended";
+  recorded_at?: string;
+}
+
+const REJECTION_MESSAGES: Record<NonNullable<RecordAttendanceRpcResult["reason"]>, string> = {
+  invalid_code: "Event not found. Check the code and try again.",
+  event_not_open: "This event is not yet available for attendance.",
+  event_ended: "This event has ended. Attendance can no longer be recorded.",
+};
+
 /**
- * Records attendance for the given student at the given event.
+ * Records the signed-in student's attendance for the event identified by
+ * `code`, via the server-side `record_attendance` RPC.
  *
- * Returns "duplicate" if the student already has an attendance record
- * for this event (the unique constraint on student_id+event_id prevents
- * double-inserts at the DB level). Returns "success" with the recorded
- * timestamp on a fresh insert.
+ * All validation happens in the database: the student id comes from the
+ * caller's JWT (auth.uid()), the role must be 'student', the code must match
+ * an event, and the event must be published or live. Direct inserts into
+ * `attendance` are revoked for API users, so this is the only write path.
+ *
+ * Returns "duplicate" if the student already has an attendance record for
+ * this event, "success" with the recorded timestamp on a fresh record, and
+ * "error" for any rejection.
  */
-export async function recordAttendance(
-  studentId: string,
-  eventId: string,
-): Promise<RecordAttendanceResult> {
-  const { data, error } = await supabase
-    .from("attendance")
-    .insert({ student_id: studentId, event_id: eventId })
-    .select("recorded_at")
-    .single();
+export async function recordAttendance(code: string): Promise<RecordAttendanceResult> {
+  const { data, error } = await supabase.rpc("record_attendance", { p_code: code });
 
   if (error) {
-    // Postgres unique_violation code = 23505
-    if (error.code === "23505") {
-      return { status: "duplicate", message: "Attendance already recorded for this event." };
+    // 42501 = raised by the RPC for unauthenticated / non-student callers.
+    if (error.code === "42501") {
+      return { status: "error", message: "Only signed-in student accounts can record attendance." };
     }
     return { status: "error", message: error.message };
   }
 
-  return { status: "success", recordedAt: data.recorded_at as string };
+  const result = data as RecordAttendanceRpcResult | null;
+  if (result?.status === "success" && result.recorded_at) {
+    return { status: "success", recordedAt: result.recorded_at };
+  }
+  if (result?.status === "duplicate") {
+    return { status: "duplicate", message: "Attendance already recorded for this event." };
+  }
+  if (result?.status === "rejected" && result.reason) {
+    return { status: "error", message: REJECTION_MESSAGES[result.reason] ?? "Attendance could not be recorded." };
+  }
+  return { status: "error", message: "Attendance could not be recorded." };
 }
 
 export type CheckAttendanceResult =

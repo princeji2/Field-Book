@@ -15,7 +15,12 @@ export interface LedgerData {
   title: string;
   eventDate: string; // "YYYY-MM-DD"
   venue: string | null;
-  code: string;
+  /**
+   * Attendance code. Only the sample fallback carries one: the live RPC no
+   * longer returns it (20260909130000_landing_ledger_hide_code.sql), because
+   * it is the credential students use to record attendance.
+   */
+  code?: string;
   rows: LedgerRow[]; // display order; length <= 5
 }
 
@@ -25,7 +30,6 @@ export interface LedgerPayload {
   title: string;
   event_date: string;
   venue: string | null;
-  code: string;
   rows: Array<{
     display_name: string;
     masked_id: string;
@@ -58,8 +62,9 @@ const isStr = (v: unknown): v is string => typeof v === "string";
 /** Returns null for null/empty/malformed payloads. Keeps row order. */
 export function parseLedgerPayload(raw: unknown): LedgerData | null {
   if (!isRecord(raw)) return null;
-  const { ledger_id, title, event_date, venue, code, rows } = raw;
-  if (!isStr(ledger_id) || !isStr(title) || !isStr(event_date) || !isStr(code)) return null;
+  // `code` is intentionally not read even if an older server still sends it.
+  const { ledger_id, title, event_date, venue, rows } = raw;
+  if (!isStr(ledger_id) || !isStr(title) || !isStr(event_date)) return null;
   if (venue !== null && venue !== undefined && !isStr(venue)) return null;
   if (!Array.isArray(rows)) return null;
 
@@ -82,7 +87,6 @@ export function parseLedgerPayload(raw: unknown): LedgerData | null {
     title,
     eventDate: event_date,
     venue: venue ?? null,
-    code,
     rows: parsed,
   };
 }

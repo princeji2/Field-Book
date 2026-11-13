@@ -15,11 +15,13 @@ export type SubmitApprovalResult =
 /**
  * Submits a "new_event" approval request for an event the calling
  * organizer owns. Publishing an event is never a direct
- * events.status = 'published' write from the frontend — the
- * events_insert_organizer / events_update_own_organizer RLS policies
- * don't allow organizers to set status to anything but 'draft' themselves.
- * An admin approving the request (ApprovalsScreen) is what eventually
- * flips the event's status server-side.
+ * events.status = 'published' write from the frontend. Organizers can only
+ * insert draft events (events_insert_organizer), and the
+ * trg_events_enforce_approval_guard trigger
+ * (20260909110000_events_approval_guard.sql) rejects any non-admin change to
+ * `status`. approvals_insert_own_organizer only accepts a pending,
+ * unreviewed row. An admin approving the request (approve_event_approval
+ * RPC) is the only path that publishes the event.
  */
 export async function submitEventApproval(eventId: string): Promise<SubmitApprovalResult> {
   const { error } = await supabase.from("approvals").insert({
@@ -173,21 +175,15 @@ export type ResolveApprovalResult =
   | { status: "error"; message: string };
 
 /**
- * Approves a pending approval request: flips the linked event's status to
- * 'published' (the next stage after 'draft' per the events.status check
- * constraint / EventStatus type — see capitalizeStatus() in events.ts),
- * then marks the approval row itself resolved. Both writes are gated by
- * is_admin()-only RLS policies (events_update_admin,
- * approvals_update_admin) — a non-admin caller gets a real Postgres "no
- * rows updated" outcome, surfaced below as an error, not a silent no-op.
+ * Approves a pending approval request through the admin-only
+ * `approve_event_approval` RPC (20260909110000_events_approval_guard.sql).
+ * In one transaction it publishes the linked event (only if it is still a
+ * draft) and marks the approval approved with reviewed_by = the calling
+ * admin. The RPC itself checks is_admin(), so a non-admin caller gets a
+ * 42501 error here rather than a partial update.
  *
- * The event is updated first, on purpose: if that write fails (bad id,
- * RLS, network), the approval is left untouched rather than marked
- * approved for an event that never actually got published. There's no
- * SECURITY DEFINER RPC wrapping both writes atomically (unlike
- * approve_role_change_request in role_change_requests.sql) — a failure
- * between the two calls can leave the event published with its approval
- * still 'pending', which the UI should let the admin retry/re-resolve.
+ * `reviewerId` is kept for the activity-log entry only. The database records
+ * the reviewer from auth.uid(), not from this argument.
  */
 export async function approveEventApproval(
   approvalId: string,
@@ -195,27 +191,13 @@ export async function approveEventApproval(
   reviewerId: string,
   eventTitle?: string,
 ): Promise<ResolveApprovalResult> {
-  const { error: eventError } = await supabase
-    .from("events")
-    .update({ status: "published" satisfies EventStatus })
-    .eq("id", eventId);
+  const { error } = await supabase.rpc("approve_event_approval", { p_approval_id: approvalId });
 
-  if (eventError) return { status: "error", message: `Couldn't publish the event: ${eventError.message}` };
-
-  const { error: approvalError } = await supabase
-    .from("approvals")
-    .update({
-      status: "approved",
-      resolved_at: new Date().toISOString(),
-      reviewed_by: reviewerId,
-    })
-    .eq("id", approvalId);
-
-  if (approvalError) {
-    return {
-      status: "error",
-      message: `Event was published, but couldn't update the approval record: ${approvalError.message}`,
-    };
+  if (error) {
+    if (error.code === "42501") return { status: "error", message: "Only admins can approve events." };
+    if (error.code === "22023") return { status: "error", message: "This request has already been resolved." };
+    if (error.code === "P0002") return { status: "error", message: "This request or its event no longer exists." };
+    return { status: "error", message: `Couldn't approve the event: ${error.message}` };
   }
 
   // Best-effort activity log entry — the approval itself already

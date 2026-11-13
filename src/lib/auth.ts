@@ -5,12 +5,10 @@ import type { Screen } from "../app/shared";
 // constraint: 'student' | 'organizer' | 'admin').
 export type AppRole = "student" | "organizer" | "admin";
 
-// Roles a user is allowed to choose for themselves at sign-up. 'admin' is
-// deliberately absent: the profiles_insert_own RLS policy rejects a
-// self-inserted admin row, and public.handle_new_user() (the signup trigger)
-// falls back to 'student' for anything that isn't exactly 'student' or
-// 'organizer'. Encoding that here keeps the frontend from even being able to
-// ask.
+// Role choices the signup form currently offers. As of
+// 20260909100000_secure_signup_roles.sql this is NOT a grant: every new
+// account is created as 'student' by public.handle_new_user(), which ignores
+// client metadata. Organizer access requires an admin-approved role request.
 export type SignupRole = Extract<AppRole, "student" | "organizer">;
 
 export interface AuthedProfile {
@@ -121,27 +119,29 @@ function otpErrorMessage(error: { code?: string; message?: string } | null | und
 }
 
 /**
- * Creates an auth user, passing full_name/role as signup metadata.
+ * Creates an auth user, passing full_name as signup metadata.
  *
  * There is intentionally NO client-side insert into `profiles` here: the
- * public.handle_new_user() trigger on auth.users reads this metadata and
- * creates the profiles row server-side, on every signup, whether or not email
- * confirmation is enabled. That's what makes profile creation independent of
- * session timing — a browser-side insert would fail profiles_insert_own's
- * `auth.uid() = id` check when signUp returns no session.
+ * public.handle_new_user() trigger on auth.users creates the profiles row
+ * server-side, on every signup, whether or not email confirmation is
+ * enabled. That trigger always assigns role 'student'.
+ *
+ * `role` is accepted for call-site compatibility but is NOT sent: signup
+ * metadata is client-controlled and must never decide a role. The result
+ * always reports 'student', the role the account actually receives.
  */
 export async function signUpWithProfile(opts: {
   email: string;
   password: string;
   fullName: string;
-  role: SignupRole;
+  role?: SignupRole;
 }): Promise<SignUpResult> {
-  const { email, password, fullName, role } = opts;
+  const { email, password, fullName } = opts;
 
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: fullName, role } },
+    options: { data: { full_name: fullName } },
   });
 
   if (error) return { status: "error", message: error.message };
@@ -153,7 +153,7 @@ export async function signUpWithProfile(opts: {
     return { status: "confirmation_required" };
   }
 
-  return { status: "success", role };
+  return { status: "success", role: "student" };
 }
 
 export type VerifySignupOtpResult =
