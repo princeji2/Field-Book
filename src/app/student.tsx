@@ -2449,7 +2449,8 @@ export function ScannerScreen({
     setPhase("recording");
     setConfirmedEv(event);
 
-    const result = await recordAttendance(profile.id, event.id);
+    // Server re-validates the code, event status and student identity.
+    const result = await recordAttendance(event.code);
 
     if (result.status === "success") {
       const now = new Date();
